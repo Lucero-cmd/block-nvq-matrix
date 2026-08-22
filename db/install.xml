@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="blocks/nvq_matrix/db" VERSION="20260721" COMMENT="XMLDB file for Moodle blocks/nvq_matrix"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="block_nvq_matrix_grades" COMMENT="Unit-level assessor grades for the NVQ Competence Matrix. Fully separate from Exabis Competence Grid tables so evidence-upload auto-seeding and exacomp's own grading can never collide with this data.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The student being graded."/>
+        <FIELD NAME="topicid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The exacomp topic (unit) this grade applies to."/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The specific course this unit belongs to, so a grade never leaks across courses."/>
+        <FIELD NAME="value" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="1 = Competent, 0 = Not Yet Competent, NULL = no verdict set (grade cleared). NULL is distinct from the row not existing at all: a row can exist purely to hold a comment with no verdict."/>
+        <FIELD NAME="comment" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Optional assessor comment, visible to the student. Independent of value - clearing the grade verdict does not clear this."/>
+        <FIELD NAME="gradedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The assessor who last set the verdict (value). NULL when value is NULL."/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Unix timestamp the verdict (value) was last set. NULL when value is NULL."/>
+        <FIELD NAME="commentedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The assessor who last saved the comment. Tracked separately from gradedby so clearing the verdict never affects comment attribution."/>
+        <FIELD NAME="commenttime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Unix timestamp shown against the comment. Normally the save time, but can be manually backdated by the assessor (e.g. grading a portfolio that was actually completed earlier)."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="gradedby" TYPE="foreign" FIELDS="gradedby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="commentedby" TYPE="foreign" FIELDS="commentedby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="studentid-topicid-courseid" UNIQUE="true" FIELDS="studentid, topicid, courseid" COMMENT="One grade per student per unit per course — prevents duplicate rows entirely."/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_sampling" COMMENT="Per-unit IQA/EQA sampling status for the NVQ Competence Matrix. Editable only by editingteacher/manager; non-editing teacher (EQA role) is view-only.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The student whose unit is being sampled."/>
+        <FIELD NAME="topicid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The exacomp topic (unit) this sampling status applies to."/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The specific course this unit belongs to."/>
+        <FIELD NAME="status" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0 = blank/not set, 1 = Sampled, 2 = Not Yet Sampled."/>
+        <FIELD NAME="sampledby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The user who last set this status."/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="sampledby" TYPE="foreign" FIELDS="sampledby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="studentid-topicid-courseid" UNIQUE="true" FIELDS="studentid, topicid, courseid" COMMENT="One sampling status per student per unit per course."/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_evidence_comments" COMMENT="Optional assessor comment attached to a single evidence item occurrence (one specific item-to-criterion link) in the NVQ Competence Matrix.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Owner of the evidence item."/>
+        <FIELD NAME="mmid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="block_exacompcompuser_mm row id - the specific item-to-criterion link this comment belongs to. The same evidence item can be linked to more than one criterion, each with its own mm row and therefore its own comment."/>
+        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The exaport item ID this comment is attached to (stored for reference/lookup convenience only - mmid is the real key)."/>
+        <FIELD NAME="comment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="evidencetype" TYPE="char" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Short code for the evidence type: APL, EoE, NA, O, P, PD, Q, RA, S, WT. NULL = not set. Independent of the comment - editable by assessors and IQA, not just whoever wrote the comment."/>
+        <FIELD NAME="commentedby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="commentedby" TYPE="foreign" FIELDS="commentedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="studentid-mmid" UNIQUE="true" FIELDS="studentid, mmid" COMMENT="One comment (and one evidence type) per item-to-criterion link per student."/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_unit_comments" COMMENT="Optional unit-level assessor comment and IQA comment for the NVQ Competence Matrix, each independent of grading/sampling and each recording who wrote it.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The student this unit's comments apply to."/>
+        <FIELD NAME="topicid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The exacomp topic (unit) these comments apply to."/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The specific course this unit belongs to, so a comment never leaks across courses."/>
+        <FIELD NAME="assessorcomment" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Optional assessor comment, independent of the grade verdict."/>
+        <FIELD NAME="assessorcommentby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The user who last saved the assessor comment."/>
+        <FIELD NAME="assessorcommenttime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Unix timestamp of the last assessor comment save."/>
+        <FIELD NAME="iqacomment" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Optional IQA comment, independent of the sampling status."/>
+        <FIELD NAME="iqacommentby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The user who last saved the IQA comment."/>
+        <FIELD NAME="iqacommenttime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Unix timestamp of the last IQA comment save."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="assessorcommentby" TYPE="foreign" FIELDS="assessorcommentby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="iqacommentby" TYPE="foreign" FIELDS="iqacommentby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="studentid-topicid-courseid" UNIQUE="true" FIELDS="studentid, topicid, courseid" COMMENT="One comment row (holding both the assessor comment and the IQA comment) per student per unit per course."/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_status" COMMENT="Final Pass/Fail status per student per course, set by the assessor once grading/IQA is complete, plus a record of when/if a completion notification was sent to the student. Deliberately separate from block_nvq_matrix_grades (unit-level) - this is the qualification-level outcome.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The student this final status applies to."/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The specific course/qualification this final status applies to."/>
+        <FIELD NAME="status" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="1 = Pass, 0 = Fail, NULL = not yet set."/>
+        <FIELD NAME="setby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The assessor who last set the status. NULL when status is NULL."/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Unix timestamp the status was last set. NULL when status is NULL."/>
+        <FIELD NAME="notifiedtime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Unix timestamp the completion notification was last sent to the student. NULL if never sent. Sending is a deliberately unconstrained, repeatable action - not gated on any workflow state - so this is purely a record of the most recent send, not a one-shot flag."/>
+        <FIELD NAME="notifiedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The assessor who last triggered the notification."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="setby" TYPE="foreign" FIELDS="setby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="notifiedby" TYPE="foreign" FIELDS="notifiedby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="studentid-courseid" UNIQUE="true" FIELDS="studentid, courseid" COMMENT="One final status per student per course."/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_evidence_types" COMMENT="Evidence type classification(s) for a single evidence item occurrence (one row per selected type). One evidence item can genuinely fit more than one type (e.g. both Observation and Professional Discussion), so this is a proper one-to-many child table of block_nvq_matrix_evidence_comments rather than a single column - deliberately NOT joined directly against the main evidence query when building the matrix (that would multiply/misalign the parent evidence row once per matching type row); always fetched as a separate keyed lookup and merged in PHP, same pattern already used for block_nvq_matrix_sampling.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="evidencecommentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="block_nvq_matrix_evidence_comments row id this type applies to."/>
+        <FIELD NAME="code" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="One of: APL, EoE, NA, O, P, PD, Q, RA, S, WT."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="evidencecommentid" TYPE="foreign" FIELDS="evidencecommentid" REFTABLE="block_nvq_matrix_evidence_comments" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="evidencecommentid-code" UNIQUE="true" FIELDS="evidencecommentid, code" COMMENT="Each type can only be selected once per evidence item - prevents duplicate rows."/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_assessor" COMMENT="The single designated Assessor for a course, chosen from that course's editing teachers. IQA and Assessor both map to the same underlying teacher/editingteacher role on this site, so this table is what actually distinguishes 'the assessor' for notification purposes - e.g. who gets notified when a student submits evidence. One row per course; set via the dropdown at the top of the matrix by anyone holding block/nvq_matrix:manageassessor (editingteacher, manager).">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The course this assessor designation applies to. One assessor per course."/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The designated assessor. Must be a user holding block/nvq_matrix:grade in this course at the time they're set - enforced by matrix_data::save_assessor(), not by a DB constraint."/>
+        <FIELD NAME="setby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The editingteacher/manager who made this designation."/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Unix timestamp this designation was last set/changed."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="setby" TYPE="foreign" FIELDS="setby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="courseid" UNIQUE="true" FIELDS="courseid" COMMENT="One designated assessor per course - saving again for the same course updates the existing row rather than inserting a second one. Deliberately no separate courseid foreign key in KEYS above - a real live upgrade attempt confirmed Moodle's xmldb_table rejects a KEY and an INDEX on the identical field set as a collision regardless of what either is named (renaming the index to 'courseid-unique' alone did NOT fix it - the second attempt hit the same rejection, just naming the index instead of the key in the error). Every other unique index in this file (e.g. evidencecommentid-code on block_nvq_matrix_evidence_types) pairs a foreign key with a unique index on a DIFFERENT, wider field combination - there's no working precedent anywhere in this plugin for a foreign key and a unique index on the exact same single field together. Moodle doesn't enforce FK referential integrity at the DB engine level regardless (it's advisory metadata only), so dropping the declared foreign key here costs nothing functionally - courseid validity is already guaranteed by context_course::instance($courseid) being called before any write in matrix_data::save_assessor()."/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_notified_items" COMMENT="Tracks which eportfolio items (block_exaportitem.id) have already triggered an assessor-submission notification. Only ever consulted when the block_nvq_matrix/renotifyonedit admin setting is OFF ('once per item') - when it's ON (the default, matching the original behaviour), classes/task/notify_assessors_task.php never reads or writes this table at all, so leaving the setting on the default costs nothing extra.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="block_exaportitem.id that has already been notified about at least once."/>
+        <FIELD NAME="timenotified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Unix timestamp of the first (and, under 'once per item' mode, only) notification for this item."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="itemid" UNIQUE="true" FIELDS="itemid" COMMENT="One 'already notified' record per item. Deliberately no separate itemid foreign key - same reasoning as block_nvq_matrix_assessor's courseid index: a KEY and an INDEX on the identical single field collide in Moodle's xmldb_table regardless of naming, confirmed the hard way on that table already. No REFTABLE relationship declared for the same reason - block_exaportitem lives in a different plugin (block_exaport) entirely, so a formal foreign key across plugin boundaries isn't meaningful here regardless."/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

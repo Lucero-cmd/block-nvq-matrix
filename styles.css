@@ -1,0 +1,1717 @@
+/**
+ * Styles for block_nvq_matrix.
+ *
+ * Units are collapsed by default. Each unit header is a clickable toggle.
+ * Gap rows (no evidence) are highlighted amber. No verdict column.
+ *
+ * @package   block_nvq_matrix
+ * @copyright 2025 Alex D&D Training Ltd
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+/* -----------------------------------------------------------------------
+   Design tokens
+   Scoped to .block-nvq-matrix (not :root) so this never leaks into the
+   surrounding Moodle theme. Palette moves off default-Bootstrap blue to a
+   slightly deeper, less saturated slate/indigo, with a consistent radius
+   and shadow scale used throughout the rest of the file.
+----------------------------------------------------------------------- */
+.block-nvq-matrix {
+    --nvq-primary: #34507a;
+    --nvq-primary-dark: #263c5c;
+    --nvq-primary-light: #eef1f7;
+    --nvq-accent: #3b6ea5;
+
+    --nvq-ink: #1c2430;
+    --nvq-ink-soft: #4b5563;
+    --nvq-ink-muted: #8a94a3;
+    --nvq-ink-faint: #b7bfca;
+
+    --nvq-border: #e2e5ea;
+    --nvq-border-strong: #d3d8e0;
+    --nvq-surface: #ffffff;
+    --nvq-surface-muted: #f7f8fa;
+    --nvq-surface-sunken: #f2f3f6;
+
+    --nvq-success: #1e8e5a;
+    --nvq-success-bg: #e4f5ec;
+    --nvq-danger: #c23b47;
+    --nvq-danger-bg: #fbe9ea;
+    --nvq-warning: #a06c1a;
+    --nvq-warning-bg: #fbf1de;
+    --nvq-info: #1f6e8c;
+    --nvq-info-bg: #e6f2f6;
+
+    --nvq-focus-ring: 0 0 0 3px rgba(59, 110, 165, 0.22);
+
+    --nvq-radius-sm: 5px;
+    --nvq-radius-md: 8px;
+    --nvq-radius-lg: 10px;
+    --nvq-radius-pill: 999px;
+
+    --nvq-shadow-sm: 0 1px 2px rgba(20, 25, 40, 0.05);
+    --nvq-shadow-md: 0 2px 8px rgba(20, 25, 40, 0.07);
+    --nvq-shadow-lg: 0 8px 24px rgba(20, 25, 40, 0.12);
+
+    --nvq-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Inter", Helvetica, Arial, sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: var(--nvq-ink);
+}
+
+/* -----------------------------------------------------------------------
+   Student selector
+----------------------------------------------------------------------- */
+.nvq-student-selector {
+    margin-bottom: 1rem;
+}
+
+.nvq-student-selector-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.nvq-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.nvq-selector-bar {
+    display: flex;
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+.nvq-selector-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: left;
+    color: var(--nvq-ink);
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: var(--nvq-surface);
+    padding: 0.45rem 0.6rem;
+    cursor: pointer;
+    transition: border-color 0.15s var(--nvq-ease), box-shadow 0.15s var(--nvq-ease);
+}
+
+.nvq-selector-trigger:hover {
+    border-color: var(--nvq-accent);
+}
+
+.nvq-selector-trigger:focus {
+    border-color: var(--nvq-accent);
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+.nvq-selector-trigger-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nvq-selector-trigger-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    color: var(--nvq-ink-soft);
+    transition: transform 0.15s var(--nvq-ease);
+}
+
+.nvq-selector-trigger-icon svg {
+    display: block;
+}
+
+.nvq-selector-trigger[aria-expanded="true"] .nvq-selector-trigger-icon {
+    transform: rotate(180deg);
+}
+
+.nvq-icon-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.15rem;
+    height: 2.15rem;
+    padding: 0;
+    line-height: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: var(--nvq-surface);
+    color: var(--nvq-ink-soft);
+    cursor: pointer;
+    transition: background-color 0.15s var(--nvq-ease), border-color 0.15s var(--nvq-ease), color 0.15s var(--nvq-ease);
+}
+
+.nvq-icon-btn svg {
+    display: block;
+    flex: 0 0 auto;
+}
+
+.nvq-icon-btn:hover {
+    border-color: var(--nvq-accent);
+    color: var(--nvq-primary-dark);
+}
+
+.nvq-icon-btn:focus {
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+.nvq-icon-btn[aria-expanded="true"] {
+    background-color: var(--nvq-primary);
+    border-color: var(--nvq-primary);
+    color: #fff;
+}
+
+.nvq-student-select {
+    font-size: 0.875rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    padding: 0.45rem 0.6rem;
+    background-color: var(--nvq-surface);
+    cursor: pointer;
+    width: 100%;
+    transition: border-color 0.15s var(--nvq-ease), box-shadow 0.15s var(--nvq-ease);
+}
+
+.nvq-student-select:focus {
+    border-color: var(--nvq-accent);
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+.nvq-student-search {
+    font-size: 0.875rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    padding: 0.45rem 0.6rem;
+    background-color: var(--nvq-surface);
+    width: 100%;
+    transition: border-color 0.15s var(--nvq-ease), box-shadow 0.15s var(--nvq-ease);
+}
+
+.nvq-student-search:focus {
+    border-color: var(--nvq-accent);
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+.nvq-student-filters {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.nvq-filter-chip {
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: var(--nvq-radius-pill);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: var(--nvq-surface);
+    color: var(--nvq-ink-soft);
+    padding: 0.3rem 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.15s var(--nvq-ease), border-color 0.15s var(--nvq-ease), color 0.15s var(--nvq-ease);
+}
+
+.nvq-filter-chip:hover {
+    border-color: var(--nvq-accent);
+    color: var(--nvq-primary-dark);
+}
+
+.nvq-filter-chip--active {
+    background-color: var(--nvq-primary);
+    border-color: var(--nvq-primary);
+    color: #fff;
+}
+
+.nvq-filter-chip--active:hover {
+    color: #fff;
+}
+
+/* BUG FIX: the `hidden` attribute alone does NOT hide an element once any
+   author stylesheet gives it an explicit `display` value — the browser's
+   own `[hidden] { display: none }` rule and an author rule like
+   `.foo { display: flex }` have equal specificity, and author-origin CSS
+   always wins that tie over the user-agent stylesheet regardless of
+   selector order. Every element below is toggled purely via
+   `el.hidden = true/false` in JS but also has its own explicit `display`
+   declared elsewhere in this file, so each needs an explicit `[hidden]`
+   override (higher specificity: class + attribute) to actually hide.
+   Without this: the picker's row list never actually collapses, the
+   search/status filter never actually hides a non-matching row, the
+   funnel/search toggles never actually hide their contents, and the
+   evidence-type popover never actually closes - all of them would just
+   sit there always visually "open" regardless of what the hidden
+   attribute (correctly) says underneath. */
+.nvq-student-list[hidden],
+.nvq-student-row[hidden],
+.nvq-student-filters[hidden],
+.nvq-completed-daterange[hidden],
+.nvq-evidencetype-popover[hidden] {
+    display: none;
+}
+
+.nvq-completed-daterange {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+    padding: 0.5rem 0.6rem;
+    background-color: var(--nvq-surface-sunken);
+    border: 1px solid var(--nvq-border);
+    border-radius: var(--nvq-radius-sm);
+}
+
+.nvq-daterange-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--nvq-ink-soft);
+}
+
+.nvq-daterange-input {
+    font-size: 0.82rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    padding: 0.3rem 0.5rem;
+    background-color: var(--nvq-surface);
+}
+
+.nvq-daterange-input:focus {
+    border-color: var(--nvq-accent);
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+.nvq-student-row-completeddate {
+    color: var(--nvq-ink-muted);
+    font-size: 0.75rem;
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.nvq-student-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 20rem;
+    overflow-y: auto;
+    border: 1px solid var(--nvq-border);
+    border-radius: var(--nvq-radius-md);
+    padding: 0.35rem;
+    background-color: var(--nvq-surface-muted);
+}
+
+.nvq-student-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: var(--nvq-radius-sm);
+    background-color: var(--nvq-surface);
+    border: 1px solid transparent;
+    text-decoration: none;
+    color: inherit;
+    transition: background-color 0.15s var(--nvq-ease), border-color 0.15s var(--nvq-ease);
+}
+
+.nvq-student-row:hover {
+    border-color: var(--nvq-border-strong);
+    background-color: var(--nvq-primary-light);
+}
+
+.nvq-student-row--active {
+    border-color: var(--nvq-accent);
+    background-color: var(--nvq-primary-light);
+}
+
+.nvq-student-row-name {
+    font-weight: 600;
+    color: var(--nvq-ink);
+    flex: 0 0 auto;
+}
+
+.nvq-student-row-course {
+    color: var(--nvq-ink-muted);
+    font-size: 0.8rem;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nvq-student-row-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: var(--nvq-radius-pill);
+    padding: 0.15rem 0.55rem;
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.nvq-badge--completed {
+    background-color: var(--nvq-success-bg);
+    color: var(--nvq-success);
+}
+
+.nvq-badge--needsgrading {
+    background-color: var(--nvq-warning-bg);
+    color: var(--nvq-warning);
+}
+
+.nvq-badge--archived {
+    background-color: var(--nvq-info-bg);
+    color: var(--nvq-info);
+}
+
+.nvq-badge--fail {
+    background-color: var(--nvq-danger-bg);
+    color: var(--nvq-danger);
+}
+
+.nvq-archived-toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--nvq-border);
+    /* .nvq-student-filters (the parent) is display:flex;flex-wrap:wrap -
+       without this, this div would just sit beside the filter chips as
+       another flex item rather than reliably wrapping to its own line,
+       and the border-top/margin-top above wouldn't read as a divider. */
+    flex-basis: 100%;
+}
+
+.nvq-archived-toggle-label {
+    font-size: 0.85rem;
+    color: var(--nvq-ink-muted);
+    cursor: pointer;
+}
+
+.nvq-student-row-empty {
+    padding: 0.6rem;
+    text-align: center;
+    color: var(--nvq-ink-muted);
+    font-size: 0.82rem;
+}
+
+/* -----------------------------------------------------------------------
+   Portfolio links panel (local_nvqportfolio integration)
+----------------------------------------------------------------------- */
+.nvq-portfolio-panel {
+    background: var(--nvq-surface-muted);
+    border: 1px solid var(--nvq-border);
+    border-radius: var(--nvq-radius-md);
+    padding: 0.75rem 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+.nvq-portfolio-coursename {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--nvq-ink-soft);
+    margin-bottom: 0.5rem;
+}
+
+.nvq-portfolio-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.nvq-portfolio-link {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--nvq-border-strong);
+    border-radius: var(--nvq-radius-sm);
+    background-color: var(--nvq-surface);
+    color: var(--nvq-primary);
+    text-decoration: none;
+    transition: border-color 0.15s var(--nvq-ease), background-color 0.15s var(--nvq-ease),
+        transform 0.15s var(--nvq-ease);
+}
+
+.nvq-portfolio-link:hover {
+    background-color: var(--nvq-primary-light);
+    border-color: var(--nvq-accent);
+    color: var(--nvq-primary-dark);
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+/* -----------------------------------------------------------------------
+   Overall progress
+----------------------------------------------------------------------- */
+.nvq-overall-progress {
+    background: var(--nvq-surface-muted);
+    border: 1px solid var(--nvq-border);
+    border-radius: var(--nvq-radius-md);
+    padding: 0.75rem 0.9rem;
+    margin-bottom: 0.9rem;
+}
+
+.nvq-progress-label {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--nvq-ink-soft);
+    margin-bottom: 0.4rem;
+}
+
+.nvq-progress-bar-outer {
+    height: 16px;
+    border-radius: var(--nvq-radius-pill);
+    background-color: var(--nvq-border);
+    overflow: hidden;
+}
+
+.nvq-overall-bar {
+    background: var(--nvq-primary);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 16px;
+    transition: width 0.5s var(--nvq-ease);
+    color: #fff;
+    white-space: nowrap;
+    text-align: right;
+    padding-right: 8px;
+    min-width: 2.2rem;
+}
+
+/* -----------------------------------------------------------------------
+   Unit card
+----------------------------------------------------------------------- */
+.nvq-unit-card {
+    border: 1px solid var(--nvq-border);
+    border-radius: var(--nvq-radius-lg);
+    margin-bottom: 0.65rem;
+    overflow: hidden;
+    box-shadow: var(--nvq-shadow-sm);
+    transition: box-shadow 0.2s var(--nvq-ease);
+}
+
+.nvq-unit-card:has(.nvq-unit-header--open) {
+    box-shadow: var(--nvq-shadow-md);
+}
+
+/* -----------------------------------------------------------------------
+   Unit header (clickable toggle)
+----------------------------------------------------------------------- */
+.nvq-unit-header {
+    background: var(--nvq-primary);
+    color: #fff;
+    padding: 0.7rem 0.95rem;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: background-color 0.15s var(--nvq-ease);
+    outline: none;
+}
+
+.nvq-unit-header:hover,
+.nvq-unit-header:focus {
+    background: var(--nvq-primary-dark);
+}
+
+.nvq-unit-header:focus-visible {
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+
+.nvq-unit-header--open {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.nvq-unit-header-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.nvq-unit-chevron {
+    font-size: 0.6rem;
+    margin-top: 0.25rem;
+    flex-shrink: 0;
+    transition: transform 0.2s var(--nvq-ease);
+    display: inline-block;
+    opacity: 0.85;
+}
+
+.nvq-unit-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    line-height: 1.4;
+    flex: 1;
+}
+
+.nvq-unit-badge {
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: var(--nvq-radius-pill);
+    padding: 0.15em 0.65em;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: 0.05rem;
+}
+
+/* Unit progress bar inside header */
+.nvq-unit-progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-top: 0.5rem;
+}
+
+.nvq-unit-progress-bar {
+    flex: 1;
+    height: 5px;
+    border-radius: var(--nvq-radius-pill);
+    background-color: rgba(255, 255, 255, 0.22);
+    overflow: hidden;
+    max-width: 160px;
+}
+
+.nvq-unit-bar {
+    background-color: #7fe3ae;
+    border-radius: var(--nvq-radius-pill);
+    transition: width 0.35s var(--nvq-ease);
+}
+
+.nvq-unit-progress-text {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.74rem;
+    white-space: nowrap;
+}
+
+/* -----------------------------------------------------------------------
+   Unit body — hidden by default, shown on toggle
+----------------------------------------------------------------------- */
+.nvq-unit-body {
+    background: #fff;
+}
+
+/* -----------------------------------------------------------------------
+   Criteria table
+----------------------------------------------------------------------- */
+.nvq-criteria-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.nvq-criteria-table thead th {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--nvq-ink-muted);
+    background-color: var(--nvq-surface-muted);
+    border-bottom: 1px solid var(--nvq-border);
+    padding: 0.55rem 0.9rem;
+}
+
+.nvq-col-criterion {
+    width: 40%;
+}
+
+.nvq-col-evidence {
+    width: 60%;
+}
+
+.nvq-criterion-row td {
+    padding: 0.8rem 0.9rem;
+    vertical-align: top;
+    border-bottom: 1px solid var(--nvq-border);
+    font-size: 0.8125rem;
+    transition: background-color 0.15s var(--nvq-ease);
+}
+
+.nvq-criteria-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Gap rows — no evidence linked */
+.nvq-row-gap td {
+    background-color: var(--nvq-warning-bg);
+}
+
+.nvq-row-gap:hover td {
+    background-color: #f6e6c2;
+}
+
+/* Status dot */
+.nvq-gap-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 7px;
+    flex-shrink: 0;
+    vertical-align: middle;
+    position: relative;
+    top: -1px;
+}
+
+.nvq-dot-filled {
+    background-color: var(--nvq-success);
+}
+
+.nvq-dot-empty {
+    background-color: var(--nvq-surface);
+    border: 1.5px solid var(--nvq-ink-faint);
+}
+
+.nvq-criterion-text {
+    line-height: 1.45;
+    color: var(--nvq-ink);
+}
+
+/* -----------------------------------------------------------------------
+   Evidence list
+----------------------------------------------------------------------- */
+.nvq-evidence-list {
+    margin: 0;
+    padding: 0;
+}
+
+.nvq-evidence-item {
+    display: block;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--nvq-border);
+    line-height: 1.35;
+}
+
+.nvq-evidence-list li.nvq-evidence-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.nvq-evidencetype-picker {
+    position: relative;
+    display: inline-flex;
+}
+
+.nvq-evidencetype-toggle {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: var(--nvq-surface);
+    color: var(--nvq-ink-soft);
+    cursor: pointer;
+    transition: border-color 0.15s var(--nvq-ease), color 0.15s var(--nvq-ease);
+}
+
+.nvq-evidencetype-toggle:hover {
+    border-color: var(--nvq-accent);
+    color: var(--nvq-primary);
+}
+
+.nvq-evidencetype-toggle:focus {
+    border-color: var(--nvq-accent);
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+.nvq-evidencetype-toggle[aria-expanded="true"] {
+    background-color: var(--nvq-primary);
+    border-color: var(--nvq-primary);
+    color: #fff;
+}
+
+.nvq-evidencetype-popover {
+    /* Fixed, not absolute: .nvq-unit-card (an ancestor of every evidence
+       row) sets overflow:hidden to round its corners, which would clip an
+       absolutely-positioned popover the moment an evidence item sits near
+       the card's bottom/right edge. position:fixed escapes that ancestor
+       clipping entirely (nothing in this popover's ancestor chain sets a
+       transform/filter/will-change, which is the only thing that would
+       re-trap a fixed-position element) — top/left are computed and set
+       inline by JS (openEvidenceTypePopover()) each time it opens, and the
+       listener in closeAllEvidenceTypePopovers() closes it on scroll/resize
+       rather than trying to keep repositioning it live. */
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 13rem;
+    max-width: min(20rem, calc(100vw - 1rem));
+    padding: 0.5rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: var(--nvq-surface);
+    box-shadow: var(--nvq-shadow-md);
+}
+
+.nvq-evidencetype-option {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--nvq-ink);
+    padding: 0.2rem 0.3rem;
+    border-radius: var(--nvq-radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.nvq-evidencetype-option:hover {
+    background-color: var(--nvq-surface-sunken);
+}
+
+.nvq-evidencetype-checkbox {
+    flex: 0 0 auto;
+    margin: 0;
+    cursor: pointer;
+}
+
+/* Evidence type now renders as an inline tag inside .nvq-evidence-item-main,
+   immediately to the left of its evidence's icon/name, so the two can never
+   drift apart the way two independently-sized parallel lists could. Which
+   of display/editrow shows is controlled entirely by the .nvq-editmode
+   class on .block-nvq-matrix (see the global toggle rules further down) —
+   not by any per-item state. */
+.nvq-evidencetype-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+}
+
+.nvq-evidencetype-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.nvq-evidencetype-value {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--nvq-primary-dark);
+    background-color: var(--nvq-primary-light);
+    border-radius: var(--nvq-radius-pill);
+    padding: 0.15rem 0.55rem;
+    white-space: nowrap;
+}
+
+.nvq-evidencetype-value--unset {
+    color: var(--nvq-ink-faint);
+    background-color: var(--nvq-surface-sunken);
+    font-style: italic;
+    font-weight: 500;
+}
+
+.nvq-evidencetype-status {
+    font-size: 0.85rem;
+}
+
+.nvq-evidencetype-readonly {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--nvq-primary-dark);
+    background-color: var(--nvq-primary-light);
+    border-radius: var(--nvq-radius-pill);
+    padding: 0.15rem 0.55rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Global edit-mode toggle                                             */
+/* ------------------------------------------------------------------ */
+
+.nvq-editmode-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.85rem;
+}
+
+.nvq-editmode-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.45rem 0.9rem;
+    border-radius: var(--nvq-radius-pill);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: var(--nvq-surface);
+    color: var(--nvq-ink-soft);
+    box-shadow: var(--nvq-shadow-sm);
+    transition: all 0.15s var(--nvq-ease);
+}
+
+.nvq-editmode-toggle:hover {
+    border-color: var(--nvq-accent);
+    color: var(--nvq-primary);
+}
+
+.nvq-editmode-toggle--active {
+    background-color: var(--nvq-primary);
+    border-color: var(--nvq-primary);
+    color: #fff;
+    box-shadow: var(--nvq-shadow-md);
+}
+
+.nvq-editmode-toggle--active:hover {
+    background-color: var(--nvq-primary-dark);
+    border-color: var(--nvq-primary-dark);
+    color: #fff;
+}
+
+/* Evidence type: dropdown hidden / plain text shown until edit mode is on. */
+.block-nvq-matrix:not(.nvq-editmode) .nvq-evidencetype-editrow {
+    display: none;
+}
+
+.block-nvq-matrix.nvq-editmode .nvq-evidencetype-display {
+    display: none;
+}
+
+/* Comments: the textarea itself never disappears (its text is always what
+   should be visible) — only its readOnly state and appearance change. The
+   [readonly] attribute selector tracks the JS-set property automatically,
+   so no separate class needs toggling per field. */
+.nvq-item-comment[readonly],
+.nvq-grade-comment[readonly],
+.nvq-unit-comment[readonly] {
+    border-color: transparent;
+    background-color: transparent;
+    box-shadow: none;
+    resize: none;
+    cursor: default;
+    padding-left: 0;
+    padding-right: 0;
+    color: var(--nvq-ink-soft);
+}
+
+/* A readonly textarea still renders its placeholder when empty — without
+   this, a locked, empty comment box (e.g. one no comment has ever been
+   left in) would show "Add a comment..." as if inviting input, undermining
+   the whole point of looking read-only until edit mode is on. */
+.nvq-item-comment[readonly]::placeholder,
+.nvq-grade-comment[readonly]::placeholder,
+.nvq-unit-comment[readonly]::placeholder {
+    color: transparent;
+}
+
+/* Readonly fields are still focusable (e.g. clicking to select/copy text),
+   and .nvq-item-comment:focus / .nvq-grade-comment:focus elsewhere in this
+   file would otherwise still show their blue "active" glow even though
+   typing does nothing — that would make a locked comment look editable
+   right when someone clicks it. Higher specificity here ([readonly] adds
+   an attribute selector) beats those rules regardless of order. */
+.nvq-item-comment[readonly]:focus,
+.nvq-grade-comment[readonly]:focus,
+.nvq-unit-comment[readonly]:focus {
+    border-color: transparent;
+    background-color: transparent;
+    box-shadow: none;
+    outline: none;
+}
+
+/* Backdating only makes sense while actively editing. */
+.block-nvq-matrix:not(.nvq-editmode) .nvq-comment-date-wrap {
+    display: none;
+}
+
+.nvq-evidence-icon {
+    font-size: 0.72rem;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+.nvq-evidence-name {
+    word-break: break-word;
+    color: var(--nvq-ink);
+}
+
+/* Clickable evidence link */
+.nvq-evidence-link {
+    word-break: break-word;
+    color: var(--nvq-primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.nvq-evidence-link:hover,
+.nvq-evidence-link:focus {
+    text-decoration: underline;
+    color: var(--nvq-primary-dark);
+}
+
+.nvq-no-evidence {
+    font-size: 0.78rem;
+    color: var(--nvq-ink-faint);
+    font-style: italic;
+}
+
+/* -----------------------------------------------------------------------
+   Grade column — assessor controls and read-only badge
+----------------------------------------------------------------------- */
+.nvq-grade-controls-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.nvq-grade-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+/* Locked-by-default: only the read-only badge shows, matching the student
+   view exactly. Interactive controls (buttons/textarea/date) only appear
+   once "Edit matrix" is clicked. The :has() guard means this only fires
+   when a real editrow exists to replace it — a viewer who can edit some
+   other field (evidence type, IQA comment) but not grades never loses this
+   badge with nothing rendered in its place. */
+.block-nvq-matrix:not(.nvq-editmode) .nvq-grade-editrow {
+    display: none;
+}
+
+.block-nvq-matrix.nvq-editmode .nvq-grade-controls-wrap:has(.nvq-grade-editrow) .nvq-grade-readonly {
+    display: none;
+}
+
+.nvq-grade-buttons {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.nvq-grade-btn {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    background: var(--nvq-surface);
+    color: var(--nvq-ink-soft);
+    cursor: pointer;
+    transition: all 0.15s var(--nvq-ease);
+    white-space: nowrap;
+}
+
+.nvq-grade-btn:hover {
+    border-color: var(--nvq-ink-faint);
+    background-color: var(--nvq-surface-muted);
+}
+
+.nvq-grade-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.nvq-grade-btn:disabled:hover {
+    border-color: var(--nvq-border-strong);
+    background-color: var(--nvq-surface);
+}
+
+.nvq-grade-na {
+    color: var(--nvq-ink-faint);
+    font-size: 0.85rem;
+}
+
+.nvq-grade-controls--disabled {
+    opacity: 0.85;
+}
+
+.nvq-grade-disabled-hint {
+    font-size: 0.7rem;
+    color: var(--nvq-ink-faint);
+    font-style: italic;
+}
+
+.nvq-grade-competent.nvq-grade-btn--active {
+    background-color: var(--nvq-success);
+    border-color: var(--nvq-success);
+    color: #fff;
+}
+
+.nvq-grade-notyet.nvq-grade-btn--active {
+    background-color: var(--nvq-danger);
+    border-color: var(--nvq-danger);
+    color: #fff;
+}
+
+.nvq-grade-clear {
+    background: transparent;
+    border-color: transparent;
+    color: var(--nvq-ink-faint);
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.nvq-grade-clear:hover {
+    color: var(--nvq-danger);
+    border-color: transparent;
+}
+
+.nvq-grade-comment {
+    font-size: 0.75rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    resize: vertical;
+    min-height: 2.2rem;
+    width: 100%;
+}
+
+.nvq-grade-comment:focus {
+    border-color: var(--nvq-accent);
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+.nvq-grade-status {
+    font-size: 0.7rem;
+    min-height: 1em;
+}
+
+.nvq-item-comment-status,
+.nvq-unit-comment-status {
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-height: 1.2em;
+}
+
+.nvq-grade-saving {
+    color: var(--nvq-ink-muted);
+}
+
+.nvq-grade-saved {
+    color: var(--nvq-success);
+    font-weight: 600;
+}
+
+.nvq-grade-error {
+    color: var(--nvq-danger);
+    font-weight: 600;
+}
+
+/* Read-only verdict badge — shown to students and non-grading roles */
+.nvq-grade-readonly {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.nvq-grade-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 0.22rem 0.6rem;
+    border-radius: var(--nvq-radius-pill);
+    width: fit-content;
+}
+
+.nvq-grade-badge--competent {
+    background-color: var(--nvq-success-bg);
+    color: var(--nvq-success);
+}
+
+.nvq-grade-badge--notyet {
+    background-color: var(--nvq-danger-bg);
+    color: var(--nvq-danger);
+}
+
+.nvq-grade-badge--notgraded {
+    background-color: var(--nvq-surface-sunken);
+    color: var(--nvq-ink-muted);
+    font-weight: 600;
+}
+
+.nvq-grade-comment-readonly {
+    font-size: 0.76rem;
+    color: var(--nvq-ink-soft);
+    line-height: 1.4;
+    font-style: italic;
+    word-break: break-word;
+}
+
+/* -----------------------------------------------------------------------
+   Notice / empty state
+----------------------------------------------------------------------- */
+.nvq-matrix-notice {
+    font-size: 0.875rem;
+    border-radius: 6px;
+}
+
+/* -----------------------------------------------------------------------
+   Responsive — stack columns on narrow screens
+----------------------------------------------------------------------- */
+@media (max-width: 500px) {
+    .nvq-criteria-table,
+    .nvq-criteria-table thead,
+    .nvq-criteria-table tbody,
+    .nvq-criteria-table tr,
+    .nvq-criteria-table th,
+    .nvq-criteria-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .nvq-criteria-table thead {
+        display: none;
+    }
+
+    .nvq-criterion-row td {
+        border-bottom: none;
+        padding: 0.3rem 0.75rem;
+    }
+
+    .nvq-criterion-row td:last-child {
+        padding-bottom: 0.65rem;
+        border-bottom: 1px solid var(--nvq-border);
+    }
+}
+
+/* -----------------------------------------------------------------------
+   Idle state — shown before any student is selected
+----------------------------------------------------------------------- */
+.nvq-idle-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    color: var(--nvq-ink-faint);
+    text-align: center;
+    gap: 0.5rem;
+}
+
+.nvq-idle-icon {
+    font-size: 2rem;
+    opacity: 0.4;
+}
+
+.nvq-idle-text {
+    font-size: 0.8125rem;
+    font-style: italic;
+}
+
+/* -----------------------------------------------------------------------
+   Idle state prompt — shown before a student is selected
+----------------------------------------------------------------------- */
+.nvq-idle-prompt {
+    color: var(--nvq-ink-muted);
+    font-size: 0.8125rem;
+    font-style: italic;
+    text-align: center;
+    padding: 1.1rem 0.5rem;
+    border: 1px dashed var(--nvq-border-strong);
+    border-radius: var(--nvq-radius-md);
+    margin-top: 0.5rem;
+    background: var(--nvq-surface-muted);
+}
+
+/* -----------------------------------------------------------------------
+   LO header — sits between unit body open and each criteria table
+----------------------------------------------------------------------- */
+.nvq-lo-header {
+    background-color: var(--nvq-primary-light);
+    color: var(--nvq-primary-dark);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.5rem 0.9rem;
+    border-top: 1px solid var(--nvq-border);
+    border-bottom: 1px solid var(--nvq-border);
+    line-height: 1.4;
+}
+
+.nvq-lo-header:first-child {
+    border-top: none;
+}
+
+/* -----------------------------------------------------------------------
+   Course title — displayed at the top of each expanded unit body
+----------------------------------------------------------------------- */
+.nvq-course-title {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--nvq-ink-muted);
+    padding: 0.55rem 0.85rem 0.35rem;
+    border-bottom: 1px solid var(--nvq-border);
+    margin-bottom: 0.25rem;
+}
+
+/* -----------------------------------------------------------------------
+   Full-page view — top bar and back link
+----------------------------------------------------------------------- */
+.nvq-view-topbar {
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.nvq-export-link {
+    margin-left: auto;
+}
+
+.nvq-back-link {
+    font-size: 0.875rem;
+    color: var(--nvq-primary);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-weight: 500;
+}
+
+.nvq-back-link:hover {
+    text-decoration: underline;
+    color: var(--nvq-primary-dark);
+}
+
+/* -----------------------------------------------------------------------
+   Block footer — "View full page" link
+----------------------------------------------------------------------- */
+.nvq-viewfullpage-link {
+    font-size: 0.8rem;
+    color: var(--nvq-primary);
+    text-decoration: none;
+    display: inline-block;
+    padding: 0.1rem 0;
+    font-weight: 500;
+}
+
+.nvq-viewfullpage-link:hover {
+    text-decoration: underline;
+    color: var(--nvq-primary-dark);
+}
+
+/* -----------------------------------------------------------------------
+   Dashboard launcher block
+----------------------------------------------------------------------- */
+.nvq-launcher {
+    padding: 0.25rem 0.1rem 0.5rem;
+}
+
+.nvq-launcher-desc {
+    font-size: 0.8125rem;
+    color: var(--nvq-ink-soft);
+    line-height: 1.55;
+    margin-bottom: 0.9rem;
+}
+
+.nvq-launcher-action {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.nvq-launcher-btn {
+    font-size: 0.875rem;
+    padding: 0.5rem 1.2rem;
+    border-radius: var(--nvq-radius-sm);
+    background: var(--nvq-primary);
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.15s var(--nvq-ease), box-shadow 0.15s var(--nvq-ease),
+        transform 0.15s var(--nvq-ease);
+}
+
+.nvq-launcher-btn:hover,
+.nvq-launcher-btn:focus {
+    background: var(--nvq-primary-dark);
+    color: #fff;
+    text-decoration: none;
+    box-shadow: var(--nvq-shadow-md);
+    transform: translateY(-1px);
+}
+
+/* -----------------------------------------------------------------------
+   Unit-level grade badge in header
+----------------------------------------------------------------------- */
+.nvq-unit-grade-badge-header,
+.nvq-unit-sample-badge-header {
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 0.18rem 0.6rem;
+    border-radius: var(--nvq-radius-pill);
+    white-space: nowrap;
+    margin-left: 0.4rem;
+}
+
+.nvq-unit-sample-badge-header.nvq-sample-badge--blank {
+    display: none;
+}
+
+/* -----------------------------------------------------------------------
+   Unit-level grading/sampling summary row — bottom of expanded unit body
+----------------------------------------------------------------------- */
+.nvq-unit-grade-summary,
+.nvq-unit-sample-summary {
+    margin: 0.75rem 0.25rem 0.25rem;
+    padding: 0.75rem;
+    border-top: 1px solid var(--nvq-border);
+}
+
+.nvq-unit-sample-summary {
+    border-top: none;
+    padding-top: 0;
+}
+
+.nvq-unit-grade-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--nvq-ink-muted);
+    margin-bottom: 0.4rem;
+}
+
+/* -----------------------------------------------------------------------
+   Per-evidence-item comment
+----------------------------------------------------------------------- */
+.nvq-evidence-item-main {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-bottom: 0.3rem;
+}
+
+.nvq-item-comment {
+    font-size: 0.76rem;
+    line-height: 1.4;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: var(--nvq-surface-muted);
+    resize: vertical;
+    min-height: 2.4rem;
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    margin-left: 1.4rem;
+    box-sizing: border-box;
+    transition: border-color 0.15s var(--nvq-ease), background-color 0.15s var(--nvq-ease);
+}
+
+.nvq-item-comment::placeholder {
+    color: var(--nvq-ink-faint);
+    font-style: italic;
+}
+
+.nvq-item-comment:focus {
+    border-color: var(--nvq-accent);
+    background-color: var(--nvq-surface);
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+.nvq-item-comment-readonly {
+    font-size: 0.76rem;
+    color: var(--nvq-ink-soft);
+    font-style: italic;
+    line-height: 1.4;
+    margin-left: 1.4rem;
+}
+
+/* Locked-by-default, same pattern as grade/sample above — and for the
+   same reason: a locked <textarea readonly> was still picking up
+   Bootstrap's own .form-control[readonly] grey-background rule (identical
+   CSS specificity to our override, loaded after block CSS, so it won
+   regardless of our [readonly] rules below). Actually hiding the
+   interactive editrow entirely and showing a plain read-only <div> in its
+   place sidesteps that fight completely, rather than trying to win it. As
+   a result the [readonly] rules further down in this file no longer
+   apply to any *visible* state of these three textareas — they're kept
+   only as a defensive fallback (e.g. if JS fails to run before first
+   paint on a slow connection), not as the primary mechanism anymore. */
+.block-nvq-matrix:not(.nvq-editmode) .nvq-item-comment-editrow {
+    display: none;
+}
+
+.block-nvq-matrix.nvq-editmode .nvq-evidence-item:has(.nvq-item-comment-editrow) .nvq-item-comment-readonly {
+    display: none;
+}
+
+/* -----------------------------------------------------------------------
+   Sampling status — dropdown and read-only badge
+----------------------------------------------------------------------- */
+.nvq-sample-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+/* Locked-by-default, same pattern and :has() reasoning as the grade
+   column above. */
+.block-nvq-matrix:not(.nvq-editmode) .nvq-sample-editrow {
+    display: none;
+}
+
+.block-nvq-matrix.nvq-editmode .nvq-sample-wrap:has(.nvq-sample-editrow) .nvq-sample-readonly {
+    display: none;
+}
+
+.nvq-sample-select {
+    font-size: 0.78rem;
+    max-width: 220px;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: var(--nvq-surface);
+}
+
+.nvq-sample-select:focus {
+    border-color: var(--nvq-accent);
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+.nvq-sample-status {
+    font-size: 0.7rem;
+    min-height: 1em;
+}
+
+.nvq-sample-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 0.22rem 0.6rem;
+    border-radius: var(--nvq-radius-pill);
+    width: fit-content;
+}
+
+.nvq-sample-badge--sampled {
+    background-color: var(--nvq-info-bg);
+    color: var(--nvq-info);
+}
+
+.nvq-sample-badge--notyetsampled {
+    background-color: var(--nvq-warning-bg);
+    color: var(--nvq-warning);
+}
+
+.nvq-sample-readonly-blank {
+    font-size: 0.72rem;
+    color: var(--nvq-ink-faint);
+    font-style: italic;
+}
+
+/* ── Unit-level assessor comment / IQA comment — independent of grade & sampling ── */
+.nvq-unit-comment-summary {
+    margin-top: 0.5rem;
+}
+
+.nvq-unit-comment-text {
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+}
+
+.nvq-unit-comment-blank {
+    font-size: 0.72rem;
+    color: var(--nvq-ink-faint);
+    font-style: italic;
+}
+
+/* Locked-by-default, same reasoning as the evidence-item comment above. */
+.block-nvq-matrix:not(.nvq-editmode) .nvq-unit-comment-editrow {
+    display: none;
+}
+
+.block-nvq-matrix.nvq-editmode .nvq-unit-comment-summary:has(.nvq-unit-comment-editrow) .nvq-unit-comment-readonly {
+    display: none;
+}
+
+.nvq-comment-byline {
+    font-size: 0.72rem;
+    color: var(--nvq-ink-muted);
+    font-style: italic;
+}
+
+.nvq-comment-date-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.nvq-comment-date-label {
+    font-size: 0.72rem;
+    color: var(--nvq-ink-muted);
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.nvq-comment-date-input {
+    width: auto;
+    max-width: 10.5rem;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.45rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border-strong);
+    display: inline-block;
+}
+
+.nvq-comment-date-input:focus {
+    border-color: var(--nvq-accent);
+    outline: 0;
+    box-shadow: var(--nvq-focus-ring);
+}
+
+/* ------------------------------------------------------------------ */
+/* Final Pass/Fail status box                                          */
+/* ------------------------------------------------------------------ */
+
+.nvq-finalstatus-box {
+    margin-top: 1.35rem;
+    padding: 1.1rem 1.2rem;
+    border: 1px solid var(--nvq-border);
+    border-radius: var(--nvq-radius-lg);
+    background: var(--nvq-surface);
+    box-shadow: var(--nvq-shadow-sm);
+}
+
+.nvq-finalstatus-box + .nvq-finalstatus-box {
+    margin-top: 0.75rem;
+}
+
+.nvq-finalstatus-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.nvq-finalstatus-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--nvq-ink);
+}
+
+.nvq-finalstatus-course {
+    color: var(--nvq-ink-muted);
+    font-size: 0.83rem;
+}
+
+.nvq-finalstatus-body {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.nvq-finalstatus-badge {
+    display: inline-block;
+    padding: 0.3rem 0.75rem;
+    border-radius: var(--nvq-radius-pill);
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: var(--nvq-surface-sunken);
+    color: var(--nvq-ink-soft);
+}
+
+.nvq-finalstatus-badge--pass {
+    background: var(--nvq-success-bg);
+    color: var(--nvq-success);
+}
+
+.nvq-finalstatus-badge--fail {
+    background: var(--nvq-danger-bg);
+    color: var(--nvq-danger);
+}
+
+.nvq-finalstatus-badge--unset {
+    background: var(--nvq-surface-sunken);
+    color: var(--nvq-ink-muted);
+    font-weight: 400;
+    font-style: italic;
+}
+
+.nvq-finalstatus-controls {
+    display: flex;
+    gap: 0.45rem;
+}
+
+.nvq-finalstatus-date-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.45rem;
+}
+
+/* Locked-by-default: only the badge (always rendered, outside this gating)
+   shows until "Edit matrix" is clicked. No :has() guard needed here since
+   .nvq-finalstatus-badge is never inside an editrow and is never hidden by
+   this rule — it has nothing to be replaced by. */
+.block-nvq-matrix:not(.nvq-editmode) .nvq-finalstatus-editrow {
+    display: none;
+}
+
+.nvq-finalstatus-date-row .nvq-comment-date-input {
+    width: auto;
+}
+
+.nvq-finalstatus-btn--pass.nvq-finalstatus-btn--active {
+    background: var(--nvq-success);
+    border-color: var(--nvq-success);
+    color: #fff;
+}
+
+.nvq-finalstatus-btn--fail.nvq-finalstatus-btn--active {
+    background: var(--nvq-danger);
+    border-color: var(--nvq-danger);
+    color: #fff;
+}
+
+.nvq-finalstatus-notify {
+    margin-left: 0.25rem;
+}
+
+.nvq-finalstatus-status {
+    font-size: 0.85rem;
+}
+
+.nvq-finalstatus-meta {
+    margin-top: 0.55rem;
+    font-size: 0.72rem;
+    color: var(--nvq-ink-muted);
+    font-style: italic;
+}

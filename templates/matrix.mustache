@@ -1,0 +1,2054 @@
+{{!
+    Template: block_nvq_matrix/matrix
+
+    Two-level NVQ Competence Matrix:
+      Unit (Topic) → LO header → Assessment Criteria rows
+
+    Units collapsed by default; click header to expand.
+    LO headers render as sub-headings inside the expanded unit body.
+
+    @package   block_nvq_matrix
+    @copyright 2025 Alex D&D Training Ltd
+    @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+}}
+
+<div class="block-nvq-matrix" data-gradeurl="{{gradeurl}}" data-sampleurl="{{sampleurl}}" data-unitcommenturl="{{unitcommenturl}}" data-sesskey="{{sesskey}}">
+
+    {{#caneditanything}}
+    {{! Single global toggle: everything that's editable (comments,
+        evidence type) renders as plain text until this is clicked, then
+        every field on the page becomes editable at once — no per-field
+        edit icons. Individual fields still save themselves as normal
+        (on blur / on change), this button only controls visibility. }}
+    <div class="nvq-editmode-bar">
+        <button type="button" class="btn btn-outline-secondary btn-sm nvq-editmode-toggle" aria-pressed="false">
+            <span class="nvq-editmode-toggle-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="13" height="13" focusable="false">
+                    <path fill="currentColor" d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zM3.354 10.646l-.646.646a.499.499 0 0 0-.098.145l-1.204 3.01 3.01-1.204a.499.499 0 0 0 .145-.098l.646-.646-.146-.147h-.5v-.5h-.5v-.5h-.5l-.207-.207z"/>
+                </svg>
+            </span>
+            <span class="nvq-editmode-toggle-label"
+                  data-editlabel="{{#str}}editmatrix, block_nvq_matrix{{/str}}"
+                  data-donelabel="{{#str}}doneediting, block_nvq_matrix{{/str}}">{{#str}}editmatrix, block_nvq_matrix{{/str}}</span>
+        </button>
+    </div>
+    {{/caneditanything}}
+
+
+    {{! Student selector }}
+    {{#canviewall}}
+    <div class="nvq-student-selector">
+        {{{selectorhtml}}}
+    </div>
+    {{/canviewall}}
+
+    {{! Assessment Plan / Sampling Plan / Sampling Record links, one panel
+        per course this student's matrix touches. Only present when
+        local_nvqportfolio is installed and configured for that course —
+        see classes/matrix_data.php's get_portfolio_links(). }}
+    {{#portfoliolinks}}
+    <div class="nvq-portfolio-panel">
+        <div class="nvq-portfolio-coursename">{{coursename}}</div>
+        <div class="nvq-portfolio-links">
+            <a href="{{assessmentplanurl}}" class="nvq-portfolio-link" target="_blank" rel="noopener noreferrer">{{#str}}assessmentplan, block_nvq_matrix{{/str}}</a>
+            <a href="{{samplingplanurl}}" class="nvq-portfolio-link" target="_blank" rel="noopener noreferrer">{{#str}}samplingplan, block_nvq_matrix{{/str}}</a>
+            <a href="{{samplingrecordurl}}" class="nvq-portfolio-link" target="_blank" rel="noopener noreferrer">{{#str}}samplingrecord, block_nvq_matrix{{/str}}</a>
+        </div>
+    </div>
+    {{/portfoliolinks}}
+
+    {{#hasunits}}
+
+    {{! Overall progress }}
+    <div class="nvq-overall-progress">
+        <div class="nvq-progress-label">{{overalltext}}</div>
+        <div class="progress nvq-progress-bar-outer"
+             role="progressbar"
+             aria-valuenow="{{overallpct}}"
+             aria-valuemin="0"
+             aria-valuemax="100">
+            <div class="progress-bar nvq-overall-bar" style="width: {{overallpct}}%">
+                {{overallpct}}%
+            </div>
+        </div>
+    </div>
+
+    {{! One collapsible card per Unit }}
+    {{#units}}
+    <div class="nvq-unit-card" data-topicid="{{topicid}}">
+
+        <div class="nvq-unit-header"
+             role="button"
+             tabindex="0"
+             aria-expanded="false"
+             aria-controls="nvq-body-{{topicid}}"
+             onclick="nvqToggleUnit(this)"
+             onkeydown="if(event.key==='Enter'||event.key===' '){nvqToggleUnit(this)}">
+
+            <div class="nvq-unit-header-top">
+                <span class="nvq-unit-chevron" aria-hidden="true">&#9654;</span>
+                <span class="nvq-unit-title">{{unittitle}}</span>
+                <span class="nvq-unit-badge">{{unitmet}}/{{unittotal}}</span>
+                <span class="nvq-unit-grade-badge-header nvq-header-badge-{{topicid}}
+                             {{#gradecompetent}}nvq-grade-badge--competent{{/gradecompetent}}
+                             {{#gradenotyet}}nvq-grade-badge--notyet{{/gradenotyet}}
+                             {{^gradeisset}}nvq-grade-badge--notgraded{{/gradeisset}}"
+                      data-competenttext="{{#str}}competent, block_nvq_matrix{{/str}}"
+                      data-notyettext="{{#str}}notyet, block_nvq_matrix{{/str}}"
+                      data-notgradedtext="{{#str}}notgraded, block_nvq_matrix{{/str}}">
+                    {{#gradecompetent}}✓ {{#str}}competent, block_nvq_matrix{{/str}}{{/gradecompetent}}
+                    {{#gradenotyet}}✗ {{#str}}notyet, block_nvq_matrix{{/str}}{{/gradenotyet}}
+                    {{^gradeisset}}{{#str}}notgraded, block_nvq_matrix{{/str}}{{/gradeisset}}
+                </span>
+                <span class="nvq-unit-sample-badge-header nvq-header-sample-badge-{{topicid}}
+                             {{#issampled}}nvq-sample-badge--sampled{{/issampled}}
+                             {{#isnotyetsampled}}nvq-sample-badge--notyetsampled{{/isnotyetsampled}}
+                             {{#isblanksample}}nvq-sample-badge--blank{{/isblanksample}}"
+                      data-sampledtext="{{#str}}sampled, block_nvq_matrix{{/str}}"
+                      data-notyetsampledtext="{{#str}}notyetsampled, block_nvq_matrix{{/str}}">
+                    {{#issampled}}{{#str}}sampled, block_nvq_matrix{{/str}}{{/issampled}}
+                    {{#isnotyetsampled}}{{#str}}notyetsampled, block_nvq_matrix{{/str}}{{/isnotyetsampled}}
+                    {{#isblanksample}}&nbsp;{{/isblanksample}}
+                </span>
+            </div>
+
+            <div class="nvq-unit-progress-wrap">
+                <div class="progress nvq-unit-progress-bar">
+                    <div class="progress-bar nvq-unit-bar" style="width: {{progresspct}}%"></div>
+                </div>
+                <span class="nvq-unit-progress-text">{{progresstext}}</span>
+            </div>
+
+        </div>
+
+        <div class="nvq-unit-body" id="nvq-body-{{topicid}}" hidden>
+
+            {{! Course name title }}
+            {{#coursename}}
+            <div class="nvq-course-title">{{coursename}}</div>
+            {{/coursename}}
+
+            {{! LO groups inside this unit }}
+            {{#logroups}}
+
+            {{! LO header row — only rendered when lotitle is non-empty }}
+            {{#lotitle}}
+            <div class="nvq-lo-header">{{lotitle}}</div>
+            {{/lotitle}}
+
+            <table class="table table-sm nvq-criteria-table">
+                <thead>
+                    <tr>
+                        <th class="nvq-col-criterion" scope="col">
+                            {{#str}}assessmentcriterion, block_nvq_matrix{{/str}}
+                        </th>
+                        <th class="nvq-col-evidence" scope="col">
+                            {{#str}}evidencelinked, block_nvq_matrix{{/str}}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#criteria}}
+                    <tr class="nvq-criterion-row {{^haseevidence}}nvq-row-gap{{/haseevidence}}">
+
+                        <td class="nvq-col-criterion">
+                            <span class="nvq-gap-dot {{#haseevidence}}nvq-dot-filled{{/haseevidence}}{{^haseevidence}}nvq-dot-empty{{/haseevidence}}"
+                                  aria-hidden="true"></span>
+                            <span class="nvq-criterion-text">{{criterion}}</span>
+                        </td>
+
+                        <td class="nvq-col-evidence">
+                            {{#haseevidence}}
+                            <ul class="nvq-evidence-list list-unstyled mb-0">
+                                {{#items}}
+                                <li class="nvq-evidence-item">
+                                    <div class="nvq-evidence-item-main">
+                                        {{#caneditevidencetype}}
+                                        <div class="nvq-evidencetype-wrap">
+                                            <span class="nvq-evidencetype-display">
+                                                <span class="nvq-evidencetype-value{{^hasevidencetype}} nvq-evidencetype-value--unset{{/hasevidencetype}}"
+                                                      data-notsettext="{{#str}}evidencetypenotset, block_nvq_matrix{{/str}}">
+                                                    {{#hasevidencetype}}{{evidencetypelabel}}{{/hasevidencetype}}
+                                                    {{^hasevidencetype}}{{#str}}evidencetypenotset, block_nvq_matrix{{/str}}{{/hasevidencetype}}
+                                                </span>
+                                            </span>
+                                            <span class="nvq-evidencetype-editrow">
+                                                <div class="nvq-evidencetype-picker">
+                                                    <button type="button"
+                                                            class="nvq-evidencetype-toggle"
+                                                            aria-expanded="false"
+                                                            aria-haspopup="true"
+                                                            aria-label="{{#str}}evidencetype, block_nvq_matrix{{/str}}">
+                                                        {{#str}}evidencetypeedit, block_nvq_matrix{{/str}}
+                                                    </button>
+                                                    <div class="nvq-evidencetype-popover"
+                                                         data-mmid="{{mmid}}"
+                                                         data-itemid="{{itemid}}"
+                                                         data-studentid="{{studentid}}"
+                                                         data-evidencetypeurl="{{evidencetypeurl}}"
+                                                         hidden>
+                                                        {{#evidencetypeoptions}}
+                                                        <label class="nvq-evidencetype-option">
+                                                            <input type="checkbox" class="nvq-evidencetype-checkbox" value="{{code}}" {{#checked}}checked{{/checked}}>
+                                                            <span>{{label}}</span>
+                                                        </label>
+                                                        {{/evidencetypeoptions}}
+                                                    </div>
+                                                </div>
+                                            </span>
+                                            <span class="nvq-evidencetype-status" aria-live="polite"></span>
+                                        </div>
+                                        {{/caneditevidencetype}}
+                                        {{^caneditevidencetype}}
+                                        <span class="nvq-evidencetype-readonly">{{evidencetypelabel}}</span>
+                                        {{/caneditevidencetype}}
+                                        <span class="nvq-evidence-icon" aria-hidden="true">&#128196;</span>
+                                        {{#hasurl}}
+                                        <a class="nvq-evidence-link" href="{{itemurl}}" target="_blank" rel="noopener noreferrer">{{itemname}}</a>
+                                        {{/hasurl}}
+                                        {{^hasurl}}
+                                        <span class="nvq-evidence-name">{{itemname}}</span>
+                                        {{/hasurl}}
+                                    </div>
+                                    {{#hasitemcomment}}
+                                    <div class="nvq-item-comment-readonly mt-1">{{itemcomment}}</div>
+                                    {{#itemcommentbyname}}
+                                    <div class="nvq-comment-byline mt-1">{{#str}}commentedbyprefix, block_nvq_matrix, {{itemcommentbyname}}{{/str}}</div>
+                                    {{/itemcommentbyname}}
+                                    {{/hasitemcomment}}
+
+                                    {{#cancomment}}
+                                    {{! ── Interactive controls — hidden until edit mode via CSS
+                                         (see the :has() rule in styles.css). Rendering a completely
+                                         separate read-only <div> above, rather than only toggling
+                                         this textarea's readOnly/styling, sidesteps the same class of
+                                         problem the v26.3.3 addendum hit with a <select>'s native
+                                         chrome not reliably responding to CSS overrides — here it was
+                                         Bootstrap's own .form-control[readonly] rule (identical CSS
+                                         specificity to ours, loaded after block CSS) painting a grey
+                                         box regardless of our overrides. ── }}
+                                    <div class="nvq-item-comment-editrow">
+                                        <textarea class="nvq-item-comment form-control mt-1"
+                                                  rows="1"
+                                                  readonly
+                                                  data-mmid="{{mmid}}"
+                                                  data-itemid="{{itemid}}"
+                                                  data-studentid="{{studentid}}"
+                                                  data-commenturl="{{commenturl}}"
+                                                  placeholder="{{#str}}evidencecommentplaceholder, block_nvq_matrix{{/str}}"
+                                                  aria-label="{{#str}}evidencecommentplaceholder, block_nvq_matrix{{/str}}">{{itemcomment}}</textarea>
+                                        <div class="nvq-comment-date-wrap mt-1">
+                                            <label class="nvq-comment-date-label">{{#str}}commentdate, block_nvq_matrix{{/str}}</label>
+                                            <input type="date" class="nvq-comment-date-input nvq-item-commentdate form-control form-control-sm"
+                                                   value="{{itemcommentdateiso}}"
+                                                   title="{{#str}}commentdatehelp, block_nvq_matrix{{/str}}">
+                                        </div>
+                                        <div class="nvq-item-comment-status mt-1" aria-live="polite"></div>
+                                    </div>
+                                    {{/cancomment}}
+                                </li>
+                                {{/items}}
+                            </ul>
+                            {{/haseevidence}}
+                            {{^haseevidence}}
+                            <span class="nvq-no-evidence">{{noevidence}}</span>
+                            {{/haseevidence}}
+                        </td>
+
+                    </tr>
+                    {{/criteria}}
+                </tbody>
+            </table>
+
+            {{/logroups}}
+
+            {{! ── Unit-level grading summary row — full controls, bottom of expanded body ── }}
+            <div class="nvq-unit-grade-summary"
+                 data-topicid="{{topicid}}"
+                 data-studentid="{{studentid}}"
+                 data-courseid="{{courseid}}"
+                 data-confirm-competent="{{#str}}confirmgradecompetent, block_nvq_matrix{{/str}}"
+                 data-confirm-notyet="{{#str}}confirmgradenotyet, block_nvq_matrix{{/str}}">
+
+                <div class="nvq-unit-grade-label">{{#str}}col_grade, block_nvq_matrix{{/str}}</div>
+
+                <div class="nvq-grade-controls-wrap">
+
+                {{! ── Read-only verdict badge — always rendered (locked-by-
+                     default look, matches the student view exactly) and
+                     also used as the display for cangrade users whenever
+                     edit mode is off. Hidden via CSS only when a sibling
+                     .nvq-grade-editrow exists AND edit mode is on — see the
+                     :has() rule in styles.css — so a caniqacomment/
+                     isownmatrix-only viewer who toggles edit mode for some
+                     other field never loses this badge with nothing to
+                     replace it. ── }}
+                <div class="nvq-grade-readonly"
+                     data-competenttext="{{#str}}competent, block_nvq_matrix{{/str}}"
+                     data-notyettext="{{#str}}notyet, block_nvq_matrix{{/str}}"
+                     data-notgradedtext="{{#str}}notgraded, block_nvq_matrix{{/str}}">
+                    {{#gradecompetent}}
+                    <span class="nvq-grade-badge nvq-grade-badge--competent">
+                        ✓ {{#str}}competent, block_nvq_matrix{{/str}}
+                    </span>
+                    {{/gradecompetent}}
+                    {{#gradenotyet}}
+                    <span class="nvq-grade-badge nvq-grade-badge--notyet">
+                        ✗ {{#str}}notyet, block_nvq_matrix{{/str}}
+                    </span>
+                    {{/gradenotyet}}
+                    {{^gradeisset}}
+                    <span class="nvq-grade-badge nvq-grade-badge--notgraded">
+                        {{#str}}notgraded, block_nvq_matrix{{/str}}
+                    </span>
+                    {{/gradeisset}}
+                    {{#hasgradecomment}}
+                    <div class="nvq-grade-comment-readonly mt-1">{{gradecomment}}</div>
+                    {{#gradecommentbyname}}
+                    <div class="nvq-comment-byline mt-1">{{#str}}commentedbyprefix, block_nvq_matrix, {{gradecommentbyname}}{{/str}}</div>
+                    {{/gradecommentbyname}}
+                    {{/hasgradecomment}}
+                </div>
+
+                {{#cangrade}}
+                {{! ── Assessor controls (evidence present somewhere in this unit) ── }}
+                <div class="nvq-grade-controls nvq-grade-editrow">
+                    <div class="nvq-grade-buttons"
+                         role="group"
+                         aria-label="{{#str}}col_grade, block_nvq_matrix{{/str}}"
+                         data-cleartext="{{#str}}cleargrade, block_nvq_matrix{{/str}}"
+                         data-confirmcleartext="{{#str}}confirmgradeclear, block_nvq_matrix{{/str}}">
+                        <button type="button"
+                                class="nvq-grade-btn nvq-grade-competent {{#gradecompetent}}nvq-grade-btn--active{{/gradecompetent}}"
+                                data-value="1"
+                                title="{{#str}}competent, block_nvq_matrix{{/str}}">
+                            ✓ {{#str}}competent, block_nvq_matrix{{/str}}
+                        </button>
+                        <button type="button"
+                                class="nvq-grade-btn nvq-grade-notyet {{#gradenotyet}}nvq-grade-btn--active{{/gradenotyet}}"
+                                data-value="0"
+                                title="{{#str}}notyet, block_nvq_matrix{{/str}}">
+                            ✗ {{#str}}notyet, block_nvq_matrix{{/str}}
+                        </button>
+                        {{#gradeisset}}
+                        <button type="button"
+                                class="nvq-grade-btn nvq-grade-clear"
+                                title="{{#str}}cleargrade, block_nvq_matrix{{/str}}"
+                                data-confirm-clear="{{#str}}confirmgradeclear, block_nvq_matrix{{/str}}">
+                            {{#str}}cleargrade, block_nvq_matrix{{/str}}
+                        </button>
+                        {{/gradeisset}}
+                    </div>
+                    <textarea class="nvq-grade-comment form-control mt-1"
+                              rows="2"
+                              readonly
+                              placeholder="{{#str}}gradecomment, block_nvq_matrix{{/str}}"
+                              aria-label="{{#str}}gradecomment, block_nvq_matrix{{/str}}">{{gradecomment}}</textarea>
+                    <div class="nvq-comment-date-wrap mt-1">
+                        <label class="nvq-comment-date-label">{{#str}}commentdate, block_nvq_matrix{{/str}}</label>
+                        <input type="date" class="nvq-comment-date-input nvq-grade-commentdate form-control form-control-sm"
+                               value="{{gradecommentdateiso}}"
+                               title="{{#str}}commentdatehelp, block_nvq_matrix{{/str}}">
+                    </div>
+                    {{#hasgradecomment}}
+                    {{#gradecommentbyname}}
+                    <div class="nvq-comment-byline mt-1">{{#str}}commentedbyprefix, block_nvq_matrix, {{gradecommentbyname}}{{/str}}</div>
+                    {{/gradecommentbyname}}
+                    {{/hasgradecomment}}
+                    <div class="nvq-grade-status mt-1" aria-live="polite"></div>
+                </div>
+                {{/cangrade}}
+
+                </div>
+
+                {{#gradedisabled}}
+                {{! ── Assessor view, but no evidence anywhere in this unit yet.
+                     Only the disabled buttons wait for edit mode (they do
+                     nothing anyway) — the hint explaining *why* grading is
+                     disabled must stay visible always, or a locked-view
+                     assessor would have no way to know why they can't grade
+                     without first clicking Edit. ── }}
+                <div class="nvq-grade-controls nvq-grade-controls--disabled">
+                    <div class="nvq-grade-buttons nvq-grade-editrow" aria-disabled="true">
+                        <button type="button" class="nvq-grade-btn nvq-grade-competent" disabled>
+                            ✓ {{#str}}competent, block_nvq_matrix{{/str}}
+                        </button>
+                        <button type="button" class="nvq-grade-btn nvq-grade-notyet" disabled>
+                            ✗ {{#str}}notyet, block_nvq_matrix{{/str}}
+                        </button>
+                    </div>
+                    <div class="nvq-grade-disabled-hint mt-1">
+                        {{#str}}gradedisabledtext, block_nvq_matrix{{/str}}
+                    </div>
+                </div>
+                {{/gradedisabled}}
+
+            </div>
+
+            {{! ── Unit-level sampling status — dropdown for editingteacher/manager, read-only for everyone else ── }}
+            <div class="nvq-unit-sample-summary"
+                 data-topicid="{{topicid}}"
+                 data-studentid="{{studentid}}"
+                 data-courseid="{{courseid}}">
+
+                <div class="nvq-unit-grade-label">{{#str}}samplingstatus, block_nvq_matrix{{/str}}</div>
+
+                <div class="nvq-sample-wrap">
+
+                <div class="nvq-sample-readonly"
+                     data-sampledtext="{{#str}}sampled, block_nvq_matrix{{/str}}"
+                     data-notyetsampledtext="{{#str}}notyetsampled, block_nvq_matrix{{/str}}"
+                     data-blanktext="{{#str}}samplingblank, block_nvq_matrix{{/str}}">
+                    {{#issampled}}
+                    <span class="nvq-sample-badge nvq-sample-badge--sampled">{{#str}}sampled, block_nvq_matrix{{/str}}</span>
+                    {{/issampled}}
+                    {{#isnotyetsampled}}
+                    <span class="nvq-sample-badge nvq-sample-badge--notyetsampled">{{#str}}notyetsampled, block_nvq_matrix{{/str}}</span>
+                    {{/isnotyetsampled}}
+                    {{#isblanksample}}
+                    <span class="nvq-sample-readonly-blank">{{#str}}samplingblank, block_nvq_matrix{{/str}}</span>
+                    {{/isblanksample}}
+                </div>
+
+                {{#cansample}}
+                <div class="nvq-sample-editrow">
+                    <select class="nvq-sample-select form-control">
+                        <option value="0" {{#isblanksample}}selected{{/isblanksample}}>{{#str}}samplingblank, block_nvq_matrix{{/str}}</option>
+                        <option value="1" {{#issampled}}selected{{/issampled}}>{{#str}}sampled, block_nvq_matrix{{/str}}</option>
+                        <option value="2" {{#isnotyetsampled}}selected{{/isnotyetsampled}}>{{#str}}notyetsampled, block_nvq_matrix{{/str}}</option>
+                    </select>
+                    <div class="nvq-sample-status mt-1" aria-live="polite"></div>
+                </div>
+                {{/cansample}}
+
+                </div>
+
+            </div>
+
+            {{! ── Unit-level IQA comment — independent of sampling status AND
+                 of the existing grade comment. The 'teacher' archetype
+                 (IQA/EQA reviewers) holds :iqacomment, its only write
+                 capability in this plugin. ── }}
+            <div class="nvq-unit-comment-summary nvq-unit-comment-summary--iqa"
+                 data-topicid="{{topicid}}"
+                 data-studentid="{{studentid}}"
+                 data-courseid="{{courseid}}">
+
+                <div class="nvq-unit-grade-label">{{#str}}iqacommentlabel, block_nvq_matrix{{/str}}</div>
+
+                <div class="nvq-unit-comment-readonly">
+                    {{#hasiqacomment}}
+                    <div class="nvq-unit-comment-text">{{iqacomment}}</div>
+                    {{#iqacommentbyname}}
+                    <div class="nvq-comment-byline mt-1">{{#str}}commentedbyprefix, block_nvq_matrix, {{iqacommentbyname}}{{/str}}</div>
+                    {{/iqacommentbyname}}
+                    {{/hasiqacomment}}
+                    {{^hasiqacomment}}
+                    <span class="nvq-unit-comment-blank">—</span>
+                    {{/hasiqacomment}}
+                </div>
+
+                {{#caniqacomment}}
+                <div class="nvq-unit-comment-editrow">
+                    <textarea class="nvq-unit-comment form-control mt-1"
+                              rows="2"
+                              readonly
+                              placeholder="{{#str}}iqacommentplaceholder, block_nvq_matrix{{/str}}"
+                              aria-label="{{#str}}iqacommentlabel, block_nvq_matrix{{/str}}">{{iqacomment}}</textarea>
+                    <div class="nvq-comment-date-wrap mt-1">
+                        <label class="nvq-comment-date-label">{{#str}}commentdate, block_nvq_matrix{{/str}}</label>
+                        <input type="date" class="nvq-comment-date-input nvq-unit-commentdate form-control form-control-sm"
+                               value="{{iqacommentdateiso}}"
+                               title="{{#str}}commentdatehelp, block_nvq_matrix{{/str}}">
+                    </div>
+                    <div class="nvq-unit-comment-status mt-1" aria-live="polite"></div>
+                </div>
+                {{/caniqacomment}}
+
+            </div>
+
+        </div>
+
+    </div>
+    {{/units}}
+
+    {{/hasunits}}
+
+    {{^hasunits}}
+    {{#idlestate}}
+    <div class="nvq-idle-prompt">
+        {{#str}}idleprompt, block_nvq_matrix{{/str}}
+    </div>
+    {{/idlestate}}
+    {{#nostudentdata}}
+    <div class="nvq-matrix-notice alert alert-warning mt-2">
+        {{nodatastring}}
+    </div>
+    {{/nostudentdata}}
+    {{/hasunits}}
+
+    {{! Final Pass/Fail status — one box per distinct course this student
+        has units in. Shown whenever a student is selected and at least one
+        course is known, independent of hasunits (there's still a
+        meaningful "not yet set" status to show even before any grading
+        has happened). }}
+    {{#finalstatusboxes}}
+    <div class="nvq-finalstatus-box" data-courseid="{{courseid}}" data-studentid="{{studentid}}" data-finalstatusurl="{{finalstatusurl}}" data-sesskey="{{sesskey}}" data-notifyconfirm="{{notifyconfirm}}" data-clearconfirm="{{clearconfirm}}">
+        <div class="nvq-finalstatus-header">
+            <span class="nvq-finalstatus-title">{{#str}}finalstatusheading, block_nvq_matrix{{/str}}</span>
+            <span class="nvq-finalstatus-course">{{coursename}}</span>
+        </div>
+
+        <div class="nvq-finalstatus-body">
+            <span class="nvq-finalstatus-badge {{#ispass}}nvq-finalstatus-badge--pass{{/ispass}}{{#isfail}}nvq-finalstatus-badge--fail{{/isfail}}{{^statusisset}}nvq-finalstatus-badge--unset{{/statusisset}}">
+                {{statustext}}
+            </span>
+
+            {{#canfinalstatus}}
+            <div class="nvq-finalstatus-controls nvq-finalstatus-editrow">
+                <button type="button" class="btn btn-sm nvq-finalstatus-btn nvq-finalstatus-btn--pass {{#ispass}}nvq-finalstatus-btn--active{{/ispass}}" data-status="1">
+                    {{#str}}setpass, block_nvq_matrix{{/str}}
+                </button>
+                <button type="button" class="btn btn-sm nvq-finalstatus-btn nvq-finalstatus-btn--fail {{#isfail}}nvq-finalstatus-btn--active{{/isfail}}" data-status="0">
+                    {{#str}}setfail, block_nvq_matrix{{/str}}
+                </button>
+
+                {{#canclear}}
+                <button type="button" class="btn btn-sm btn-outline-danger nvq-finalstatus-clear"
+                        title="{{#str}}clearstatus, block_nvq_matrix{{/str}}">
+                    {{#str}}clearstatus, block_nvq_matrix{{/str}}
+                </button>
+                {{/canclear}}
+
+                {{#statusisset}}
+                <button type="button" class="btn btn-sm btn-outline-secondary nvq-finalstatus-notify">
+                    {{#str}}notifystudent, block_nvq_matrix{{/str}}
+                </button>
+                {{/statusisset}}
+            </div>
+
+            <div class="nvq-finalstatus-date-row nvq-finalstatus-editrow">
+                <label class="nvq-comment-date-label">{{#str}}statusdate, block_nvq_matrix{{/str}}</label>
+                <input type="date" class="nvq-comment-date-input nvq-finalstatus-setdate form-control form-control-sm"
+                       value="{{setdateiso}}"
+                       title="{{#str}}statusdatehelp, block_nvq_matrix{{/str}}">
+            </div>
+            {{/canfinalstatus}}
+
+            <span class="nvq-finalstatus-status" aria-live="polite"></span>
+        </div>
+
+        {{#hassetinfo}}
+        <div class="nvq-finalstatus-meta">{{setinfo}}</div>
+        {{/hassetinfo}}
+        {{#hasbeennotified}}
+        <div class="nvq-finalstatus-meta">{{notifiedinfo}}</div>
+        {{/hasbeennotified}}
+    </div>
+    {{/finalstatusboxes}}
+
+</div>
+
+<script>
+function nvqToggleUnit(header) {
+    var card    = header.closest('.nvq-unit-card');
+    var topicid = card.dataset.topicid;
+    var body    = document.getElementById('nvq-body-' + topicid);
+    var chevron = header.querySelector('.nvq-unit-chevron');
+    var expanded = header.getAttribute('aria-expanded') === 'true';
+
+    if (expanded) {
+        body.hidden = true;
+        header.setAttribute('aria-expanded', 'false');
+        header.classList.remove('nvq-unit-header--open');
+        if (chevron) chevron.innerHTML = '&#9654;';
+    } else {
+        body.hidden = false;
+        header.setAttribute('aria-expanded', 'true');
+        header.classList.add('nvq-unit-header--open');
+        if (chevron) chevron.innerHTML = '&#9660;';
+    }
+}
+
+    /**
+     * Single global switch for every editable comment field and evidence
+     * type dropdown on the page. Individual fields still save themselves
+     * exactly as before (comment textareas on blur, evidence type on
+     * change) — this only controls whether they're visible/interactive at
+     * all, replacing what would otherwise be a separate edit affordance on
+     * every field.
+     *
+     * Comments: textareas stay in the DOM at all times (so their current
+     * text is always what's shown); only their `readOnly` property and
+     * look are toggled — see the [readonly] rules in styles.css.
+     *
+     * Evidence type: display-text vs dropdown is toggled purely via the
+     * .nvq-editmode class on the container (see styles.css) — no per-item
+     * JS state to manage.
+     */
+    function toggleEditMode(matrix, toggleBtn) {
+        var leavingEditMode = matrix.classList.contains('nvq-editmode');
+
+        // Leaving edit mode: blur whatever's currently focused FIRST, before
+        // the class toggle below. This ordering matters more than it used
+        // to (v26.3.7 only needed it for readOnly), because the grade
+        // comment textarea now lives inside .nvq-grade-editrow, which the
+        // class toggle causes CSS to display:none. Hiding a focused element
+        // auto-fires blur on it — if that happened first, it would race
+        // the explicit blur() below and could fire after readOnly is set,
+        // hitting the readOnly guard in the blur handler and silently
+        // dropping the save. Blurring here, before anything else changes,
+        // keeps the save deterministic regardless of that side effect.
+        if (leavingEditMode && document.activeElement && matrix.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
+
+        var editing = matrix.classList.toggle('nvq-editmode');
+
+        matrix.querySelectorAll('.nvq-item-comment, .nvq-grade-comment, .nvq-unit-comment').forEach(function (ta) {
+            ta.readOnly = !editing;
+        });
+
+        toggleBtn.setAttribute('aria-pressed', editing ? 'true' : 'false');
+        toggleBtn.classList.toggle('nvq-editmode-toggle--active', editing);
+        var label = toggleBtn.querySelector('.nvq-editmode-toggle-label');
+        if (label) {
+            label.textContent = editing ? label.dataset.donelabel : label.dataset.editlabel;
+        }
+    }
+
+    /**
+     * Wires the search box + filter chips + completed-date range built
+     * server-side in view.php (see the "Build student selector HTML"
+     * section). Pure client-side show/hide - no extra requests, since the
+     * full student list for this assessor/IQA/EQA is already rendered in
+     * the page.
+     *
+     * Every row is filtered the same way regardless of whether it belongs
+     * to the currently-open student - a student enrolled on two courses
+     * gets one row per course (see view.php), each with its own status,
+     * so "Completed" must be free to hide that student's still-in-progress
+     * course row while keeping their completed one, not show both because
+     * the student happens to be the one currently on screen.
+     *
+     * The date range only applies when "Completed" is the active filter -
+     * "when completed" has no meaning for a student who hasn't completed
+     * yet - and is hidden for the other filters. Left blank (the default),
+     * it imposes no restriction at all, so the Completed chip on its own
+     * still shows every completed student.
+     *
+     * The picker itself behaves like a collapsed dropdown: a trigger
+     * button shows just the selected student's name and toggles the row
+     * list open/closed; a search icon and a funnel icon each reveal their
+     * own control (search input / filter chips) and, since there'd be
+     * nothing to show results in otherwise, also open the row list.
+     */
+    function initStudentPicker(matrix) {
+        var picker = matrix.querySelector('#nvq-student-picker');
+        if (!picker) { return; }
+
+        var searchbox = picker.querySelector('.nvq-student-search');
+        var chips = picker.querySelectorAll('.nvq-filter-chip');
+        var rows = picker.querySelectorAll('.nvq-student-row');
+        var emptymsg = picker.querySelector('.nvq-student-row-empty');
+        var daterange = picker.querySelector('.nvq-completed-daterange');
+        var datefrom = picker.querySelector('#nvq_completed_from');
+        var dateto = picker.querySelector('#nvq_completed_to');
+        var trigger = picker.querySelector('#nvq-selector-trigger');
+        var panel = picker.querySelector('#nvq-selector-panel');
+        var searchtoggle = picker.querySelector('#nvq-search-toggle');
+        var filtertoggle = picker.querySelector('#nvq-filter-toggle');
+        var filterdropdown = picker.querySelector('#nvq-filter-dropdown');
+        var archivedtoggle = picker.querySelector('#nvq-show-archived');
+        var activefilter = 'all';
+
+        function applyFilters() {
+            var query = (searchbox && searchbox.value || '').trim().toLowerCase();
+            var fromval = (activefilter === 'completed' && datefrom) ? datefrom.value : '';
+            var toval = (activefilter === 'completed' && dateto) ? dateto.value : '';
+            var visiblecount = 0;
+
+            rows.forEach(function (row) {
+                // Archived rows are deliberately NOT part of the
+                // needsgrading/completed/all chip spectrum - without this
+                // branch, activefilter === 'all' would already match them
+                // (row.dataset.status === 'archived' passes the OR below
+                // just like any other bucket), which would show archived
+                // students by default despite the toggle being off. The
+                // toggle is the only thing that governs their visibility;
+                // the bucket chips have no say over them either way.
+                var isarchived = row.dataset.status === 'archived';
+                var showarchived = archivedtoggle ? archivedtoggle.checked : false;
+                var matchesstatus = isarchived
+                    ? showarchived
+                    : ((activefilter === 'all') || row.dataset.status === activefilter);
+
+                // Date strings are YYYY-MM-DD both here and from the
+                // <input type="date"> value, so plain string comparison
+                // sorts correctly without needing to parse either side.
+                var completeddate = row.dataset.completeddate || '';
+                var matchesdate = isarchived || activefilter !== 'completed'
+                    || ((!fromval || (completeddate && completeddate >= fromval))
+                        && (!toval || (completeddate && completeddate <= toval)));
+
+                var matchessearch = !query || (row.dataset.name || '').indexOf(query) !== -1;
+                var visible = matchesstatus && matchesdate && matchessearch;
+
+                row.hidden = !visible;
+                if (visible) { visiblecount += 1; }
+            });
+
+            if (emptymsg) {
+                emptymsg.hidden = visiblecount > 0;
+            }
+        }
+
+        function openPanel() {
+            if (!panel || !panel.hidden) { return; }
+            panel.hidden = false;
+            if (trigger) { trigger.setAttribute('aria-expanded', 'true'); }
+        }
+
+        if (trigger && panel) {
+            trigger.addEventListener('click', function () {
+                var expanded = !panel.hidden;
+                panel.hidden = expanded;
+                trigger.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            });
+        }
+
+        if (searchtoggle && searchbox) {
+            searchtoggle.addEventListener('click', function () {
+                var expanded = !searchbox.hidden;
+                searchbox.hidden = expanded;
+                searchtoggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                if (!expanded) {
+                    openPanel();
+                    searchbox.focus();
+                }
+            });
+        }
+
+        if (filtertoggle && filterdropdown) {
+            filtertoggle.addEventListener('click', function () {
+                var expanded = !filterdropdown.hidden;
+                filterdropdown.hidden = expanded;
+                filtertoggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                if (!expanded) {
+                    openPanel();
+                }
+            });
+        }
+
+        if (searchbox) {
+            searchbox.addEventListener('input', applyFilters);
+        }
+
+        if (datefrom) {
+            datefrom.addEventListener('change', applyFilters);
+        }
+        if (dateto) {
+            dateto.addEventListener('change', applyFilters);
+        }
+        if (archivedtoggle) {
+            archivedtoggle.addEventListener('change', applyFilters);
+        }
+
+        chips.forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                activefilter = chip.dataset.filter;
+                chips.forEach(function (c) {
+                    var active = (c === chip);
+                    c.classList.toggle('nvq-filter-chip--active', active);
+                    c.setAttribute('aria-pressed', active ? 'true' : 'false');
+                });
+                if (daterange) {
+                    daterange.hidden = (activefilter !== 'completed');
+                }
+                applyFilters();
+            });
+        });
+
+        applyFilters();
+    }
+
+    /**
+     * Key used to carry "edit mode was on" across the full-page reloads
+     * that saveFinalStatus() / clearFinalStatus() / sendCompletionNotification()
+     * trigger on success. Edit mode is pure client-side state (a class on
+     * .block-nvq-matrix), so without this a reload always drops back to
+     * the default locked view - e.g. clicking Pass would save fine but
+     * silently kick the assessor out of edit mode, forcing an extra click
+     * on "Edit matrix" to get back to the Notify button. sessionStorage
+     * (not localStorage) is deliberate: scoped to this tab, cleared once
+     * consumed, and never leaks edit-mode intent across a fresh visit.
+     */
+    var NVQ_STAYINEDITMODE_KEY = 'nvq_matrix_stay_in_editmode';
+
+    function reloadPreservingEditMode(box) {
+        var matrix = box.closest('.block-nvq-matrix');
+        if (matrix && matrix.classList.contains('nvq-editmode')) {
+            try {
+                sessionStorage.setItem(NVQ_STAYINEDITMODE_KEY, '1');
+            } catch (e) {
+                // Storage unavailable (private browsing, quota, etc.) -
+                // degrade to the old behaviour: reload lands locked.
+            }
+        }
+        window.location.reload();
+    }
+
+    (function () {
+    'use strict';
+
+    /**
+     * Wire up grade buttons and comment textarea for all unit grade summary
+     * rows. Uses event delegation on the matrix container — safe after
+     * Mustache render. Grading is unit-level (one verdict per topic).
+     */
+    function initGrading() {
+        var matrix = document.querySelector('.block-nvq-matrix');
+        if (!matrix) { return; }
+
+        var editmodetoggle = matrix.querySelector('.nvq-editmode-toggle');
+        if (editmodetoggle) {
+            editmodetoggle.addEventListener('click', function () {
+                toggleEditMode(matrix, editmodetoggle);
+            });
+
+            try {
+                if (sessionStorage.getItem(NVQ_STAYINEDITMODE_KEY) === '1') {
+                    sessionStorage.removeItem(NVQ_STAYINEDITMODE_KEY);
+                    if (!matrix.classList.contains('nvq-editmode')) {
+                        toggleEditMode(matrix, editmodetoggle);
+                    }
+                }
+            } catch (e) {
+                // Storage unavailable - nothing to restore, page just
+                // loads locked as before.
+            }
+        }
+
+        initStudentPicker(matrix);
+
+        matrix.addEventListener('click', function (e) {
+            var btn = e.target.closest('.nvq-grade-btn');
+            if (!btn || btn.disabled) { return; }
+
+            var summary = btn.closest('.nvq-unit-grade-summary');
+            if (!summary) { return; }
+
+            // Ignore clicks while a save is already in flight for this unit.
+            if (summary.dataset.saving === '1') { return; }
+
+            // Clear button — separate action, deletes the grade entirely.
+            if (btn.classList.contains('nvq-grade-clear')) {
+                if (!window.confirm(btn.dataset.confirmClear)) { return; }
+                clearGrade(summary);
+                return;
+            }
+
+            var newvalue   = btn.dataset.value;
+            var currentBtn = summary.querySelector('.nvq-grade-btn--active');
+            var currentval = currentBtn ? currentBtn.dataset.value : null;
+
+            // No-op if re-clicking the already-active verdict.
+            if (currentval === newvalue) { return; }
+
+            var confirmmsg = (newvalue === '1')
+                ? summary.dataset.confirmCompetent
+                : summary.dataset.confirmNotyet;
+
+            if (!window.confirm(confirmmsg)) { return; }
+
+            // Toggle active state on the two buttons.
+            summary.querySelectorAll('.nvq-grade-btn').forEach(function (b) {
+                b.classList.remove('nvq-grade-btn--active');
+            });
+            btn.classList.add('nvq-grade-btn--active');
+
+            saveGrade(summary);
+        });
+
+        // Final status box — Pass/Fail buttons (no confirmation, same as
+        // any other status toggle) and the Notify button (always asks for
+        // confirmation first — see notifyconfirm, pre-rendered server-side
+        // per box since it needs the student name + course name + which
+        // status is about to be sent).
+        matrix.addEventListener('click', function (e) {
+            var statusbtn = e.target.closest('.nvq-finalstatus-btn');
+            if (statusbtn && !statusbtn.disabled) {
+                var box = statusbtn.closest('.nvq-finalstatus-box');
+                if (box && box.dataset.saving !== '1') {
+                    saveFinalStatus(box, parseInt(statusbtn.dataset.status, 10));
+                }
+                return;
+            }
+
+            var notifybtn = e.target.closest('.nvq-finalstatus-notify');
+            if (notifybtn && !notifybtn.disabled) {
+                var notifybox = notifybtn.closest('.nvq-finalstatus-box');
+                if (!notifybox || notifybox.dataset.saving === '1') { return; }
+                if (!window.confirm(notifybox.dataset.notifyconfirm)) { return; }
+                sendCompletionNotification(notifybox);
+                return;
+            }
+
+            var clearbtn = e.target.closest('.nvq-finalstatus-clear');
+            if (clearbtn && !clearbtn.disabled) {
+                var clearbox = clearbtn.closest('.nvq-finalstatus-box');
+                if (!clearbox || clearbox.dataset.saving === '1') { return; }
+                if (!window.confirm(clearbox.dataset.clearconfirm)) { return; }
+                clearFinalStatus(clearbox);
+                return;
+            }
+        });
+
+        // Save on comment blur (not every keystroke). If a verdict is
+        // active, save both together; otherwise (no verdict, or the grade
+        // was cleared) save the comment on its own via action=comment,
+        // which never touches the verdict fields.
+        matrix.addEventListener('blur', function (e) {
+            // Locked comments are still focusable (e.g. clicking to select
+            // or copy the text) — without this guard, that alone would
+            // trigger a blur-save on unchanged content and silently
+            // re-stamp commentedby/timemodified as "now". Only fields we
+            // toggle readOnly ourselves (the three comment textareas) are
+            // affected; date inputs are untouched by this check since
+            // they're hidden via CSS while locked, not readOnly, and so
+            // can't be focused/blurred at all outside edit mode anyway.
+            if (e.target.readOnly) { return; }
+
+            if (e.target.classList.contains('nvq-grade-comment')) {
+                var summary = e.target.closest('.nvq-unit-grade-summary');
+                if (!summary) { return; }
+                if (summary.dataset.saving === '1') { return; }
+                if (summary.querySelector('.nvq-grade-btn--active')) {
+                    saveGrade(summary);
+                } else {
+                    saveGradeCommentOnly(summary);
+                }
+                return;
+            }
+
+            if (e.target.classList.contains('nvq-grade-commentdate')) {
+                var summary2 = e.target.closest('.nvq-unit-grade-summary');
+                if (!summary2 || summary2.dataset.saving === '1') { return; }
+                if (summary2.querySelector('.nvq-grade-btn--active')) {
+                    saveGrade(summary2);
+                } else {
+                    saveGradeCommentOnly(summary2);
+                }
+                return;
+            }
+
+            if (e.target.classList.contains('nvq-item-comment')) {
+                saveItemComment(e.target);
+            }
+
+            if (e.target.classList.contains('nvq-item-commentdate')) {
+                var itemtextarea = e.target.closest('.nvq-evidence-item')
+                    ? e.target.closest('.nvq-evidence-item').querySelector('.nvq-item-comment')
+                    : null;
+                if (itemtextarea) { saveItemComment(itemtextarea); }
+            }
+
+            if (e.target.classList.contains('nvq-unit-comment')) {
+                saveUnitComment(e.target);
+            }
+
+            if (e.target.classList.contains('nvq-unit-commentdate')) {
+                var unittextarea = e.target.closest('.nvq-unit-comment-summary')
+                    ? e.target.closest('.nvq-unit-comment-summary').querySelector('.nvq-unit-comment')
+                    : null;
+                if (unittextarea) { saveUnitComment(unittextarea); }
+            }
+        }, true);
+
+        // Sampling dropdown — save immediately on change, no confirmation needed.
+        matrix.addEventListener('change', function (e) {
+            if (e.target.classList.contains('nvq-sample-select')) {
+                saveSampling(e.target);
+                return;
+            }
+            if (e.target.classList.contains('nvq-evidencetype-checkbox')) {
+                saveEvidenceType(e.target.closest('.nvq-evidencetype-popover'));
+                return;
+            }
+        });
+
+        // Evidence type popover — the toggle button opens/closes its own
+        // popover; clicking elsewhere closes any popover left open, since
+        // there's no other way to dismiss it (checking a box doesn't close
+        // it, so several types can be picked in one go).
+        matrix.addEventListener('click', function (e) {
+            var toggle = e.target.closest('.nvq-evidencetype-toggle');
+            if (toggle) {
+                var popover = toggle.parentElement.querySelector('.nvq-evidencetype-popover');
+                if (!popover) { return; }
+                var opening = popover.hidden;
+                closeAllEvidenceTypePopovers(matrix);
+                if (opening) {
+                    openEvidenceTypePopover(toggle, popover);
+                }
+                return;
+            }
+            if (!e.target.closest('.nvq-evidencetype-picker')) {
+                closeAllEvidenceTypePopovers(matrix);
+            }
+        });
+
+        // position:fixed popovers don't track their button across a
+        // scroll (fixed is relative to the viewport, not the page), so
+        // rather than repositioning them live on every scroll tick,
+        // simply close whichever one is open - same as clicking away.
+        // Capture phase, since scroll events on an inner scrollable
+        // element don't bubble to window.
+        window.addEventListener('scroll', function () {
+            closeAllEvidenceTypePopovers(matrix);
+        }, true);
+        window.addEventListener('resize', function () {
+            closeAllEvidenceTypePopovers(matrix);
+        });
+    }
+
+    /**
+     * Shows an evidence-type popover, positioned with fixed coordinates
+     * computed from the toggle button's current on-screen position - see
+     * the position:fixed comment on .nvq-evidencetype-popover in
+     * styles.css for why this can't just be static CSS. Horizontally
+     * clamped so a popover for an item near the right edge of the screen
+     * doesn't render partly off-screen.
+     */
+    function openEvidenceTypePopover(toggle, popover) {
+        popover.hidden = false; // unhide first so offsetWidth below is accurate.
+        toggle.setAttribute('aria-expanded', 'true');
+
+        var rect  = toggle.getBoundingClientRect();
+        var width = popover.offsetWidth || 208;
+        var left  = rect.left;
+        var maxleft = window.innerWidth - width - 8;
+        if (left > maxleft) {
+            left = Math.max(8, maxleft);
+        }
+
+        popover.style.top  = (rect.bottom + 4) + 'px';
+        popover.style.left = left + 'px';
+    }
+
+    /**
+     * Closes every open evidence-type popover in the matrix. Used both
+     * when opening a different one (only one open at a time) and on any
+     * click/scroll/resize outside a popover.
+     */
+    function closeAllEvidenceTypePopovers(matrix) {
+        matrix.querySelectorAll('.nvq-evidencetype-popover').forEach(function (p) {
+            p.hidden = true;
+        });
+        matrix.querySelectorAll('.nvq-evidencetype-toggle').forEach(function (t) {
+            t.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    function setSummaryLocked(summary, locked) {
+        summary.dataset.saving = locked ? '1' : '0';
+        summary.querySelectorAll('.nvq-grade-btn').forEach(function (b) {
+            b.disabled = locked;
+        });
+        var comment = summary.querySelector('.nvq-grade-comment');
+        if (comment) { comment.disabled = locked; }
+        var commentdate = summary.querySelector('.nvq-grade-commentdate');
+        if (commentdate) { commentdate.disabled = locked; }
+    }
+
+    /**
+     * Updates the compact badge in the unit header to match the verdict
+     * just saved from the bottom summary controls, so both stay in sync
+     * without a full page reload.
+     */
+    function syncHeaderBadge(topicid, value) {
+        var badge = document.querySelector('.nvq-header-badge-' + topicid);
+        if (!badge) { return; }
+
+        badge.classList.remove(
+            'nvq-grade-badge--competent',
+            'nvq-grade-badge--notyet',
+            'nvq-grade-badge--notgraded'
+        );
+
+        if (value === 1) {
+            badge.classList.add('nvq-grade-badge--competent');
+            badge.textContent = '\u2713 ' + badge.dataset.competenttext;
+        } else if (value === 0) {
+            badge.classList.add('nvq-grade-badge--notyet');
+            badge.textContent = '\u2717 ' + badge.dataset.notyettext;
+        } else {
+            // value === null — grade was cleared.
+            badge.classList.add('nvq-grade-badge--notgraded');
+            badge.textContent = badge.dataset.notgradedtext;
+        }
+    }
+
+    /**
+     * Updates the read-only badge inside .nvq-grade-controls-wrap (shown
+     * whenever edit mode is off) to match a verdict just saved from the
+     * editrow controls right next to it, so re-locking via "Done editing"
+     * never shows stale text without a page reload. Mirrors
+     * syncHeaderBadge() above but scoped to one unit's summary rather than
+     * the whole page.
+     *
+     * Labels come from data-*text attributes rendered server-side onto
+     * .nvq-grade-readonly (see the template), not M.util.get_string() —
+     * this plugin never calls strings_for_js(), so those strings aren't
+     * guaranteed to be preloaded into M.str and get_string() would be
+     * unreliable here. Same reasoning saveEvidenceType() already follows
+     * via its data-notsettext attribute.
+     *
+     * @param {HTMLElement} summary  .nvq-unit-grade-summary for this topic.
+     * @param {number|null} value    1 = competent, 0 = not yet, null = cleared/unset.
+     * @param {string} [comment]     Current comment text, if syncing it too.
+     * @param {string} [byline]      Pre-formatted "Name, date" string from the
+     *                               server (grade.php now returns this — see
+     *                               matrix_data::format_comment_byline()), or
+     *                               '' if the comment is blank. Omit entirely
+     *                               to leave the comment/byline untouched
+     *                               (e.g. clearGrade(), which never touches
+     *                               the comment).
+     */
+    function syncGradeReadonlyBadge(summary, value, comment, byline) {
+        var wrap = summary.querySelector('.nvq-grade-controls-wrap');
+        if (!wrap) { return; }
+        var readonlyBlock = wrap.querySelector('.nvq-grade-readonly');
+        var badge = readonlyBlock ? readonlyBlock.querySelector('.nvq-grade-badge') : null;
+        if (badge && readonlyBlock) {
+            badge.classList.remove(
+                'nvq-grade-badge--competent',
+                'nvq-grade-badge--notyet',
+                'nvq-grade-badge--notgraded'
+            );
+            if (value === 1) {
+                badge.classList.add('nvq-grade-badge--competent');
+                badge.textContent = '\u2713 ' + readonlyBlock.dataset.competenttext;
+            } else if (value === 0) {
+                badge.classList.add('nvq-grade-badge--notyet');
+                badge.textContent = '\u2717 ' + readonlyBlock.dataset.notyettext;
+            } else {
+                badge.classList.add('nvq-grade-badge--notgraded');
+                badge.textContent = readonlyBlock.dataset.notgradedtext;
+            }
+        }
+        if (typeof comment === 'string' && readonlyBlock) {
+            var commentEl = readonlyBlock.querySelector('.nvq-grade-comment-readonly');
+            var bylineEl  = readonlyBlock.querySelector('.nvq-comment-byline');
+
+            if (comment.trim() === '') {
+                if (commentEl) { commentEl.remove(); }
+                if (bylineEl) { bylineEl.remove(); }
+            } else {
+                if (!commentEl) {
+                    commentEl = document.createElement('div');
+                    commentEl.className = 'nvq-grade-comment-readonly mt-1';
+                    readonlyBlock.appendChild(commentEl);
+                }
+                commentEl.textContent = comment;
+                commentEl.style.display = '';
+
+                if (typeof byline !== 'undefined') {
+                    if (byline) {
+                        if (!bylineEl) {
+                            bylineEl = document.createElement('div');
+                            bylineEl.className = 'nvq-comment-byline mt-1';
+                            commentEl.insertAdjacentElement('afterend', bylineEl);
+                        }
+                        bylineEl.textContent = '\u2014 ' + byline;
+                    } else if (bylineEl) {
+                        bylineEl.remove();
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Creates the "Clear" grade button if it doesn't already exist. It's
+     * only ever server-rendered when a grade was already set at page load
+     * — a unit that was ungraded when the page loaded, then graded for the
+     * first time via saveGrade() in this same session, would otherwise
+     * never get a Clear button without a full page reload (pre-existing
+     * gap since v26.3.2, not something this session's editrow restructure
+     * introduced, but worth fixing now it's been hit). No-op if the button
+     * is already there. Uses the delegated click handler already attached
+     * to the whole matrix container, so nothing extra needs wiring up.
+     */
+    function ensureClearButton(summary) {
+        var buttons = summary.querySelector('.nvq-grade-buttons');
+        if (!buttons || buttons.querySelector('.nvq-grade-clear')) { return; }
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nvq-grade-btn nvq-grade-clear';
+        btn.title = buttons.dataset.cleartext;
+        btn.dataset.confirmClear = buttons.dataset.confirmcleartext;
+        btn.textContent = buttons.dataset.cleartext;
+        buttons.appendChild(btn);
+    }
+
+    function saveGrade(summary) {
+        var activeBtn = summary.querySelector('.nvq-grade-btn--active');
+        if (!activeBtn) { return; } // No verdict chosen yet — nothing to save.
+
+        var value      = parseInt(activeBtn.dataset.value, 10);
+        var comment    = (summary.querySelector('.nvq-grade-comment') || {}).value || '';
+        var commentdate = (summary.querySelector('.nvq-grade-commentdate') || {}).value || '';
+        var topicid    = parseInt(summary.dataset.topicid, 10);
+        var studentid  = parseInt(summary.dataset.studentid, 10);
+        var courseid   = parseInt(summary.dataset.courseid, 10);
+        var statusEl   = summary.querySelector('.nvq-grade-status');
+
+        var matrix   = summary.closest('.block-nvq-matrix');
+        var gradeurl = matrix ? matrix.dataset.gradeurl : '';
+        var sesskey  = matrix ? matrix.dataset.sesskey  : '';
+
+        if (!gradeurl || !courseid) { return; }
+
+        setSummaryLocked(summary, true);
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-grade-status mt-1 nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams({
+            topicid   : topicid,
+            studentid : studentid,
+            courseid  : courseid,
+            value     : value,
+            comment   : comment,
+            commentdate : commentdate,
+            sesskey   : sesskey,
+        });
+
+        fetch(gradeurl, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (statusEl) {
+                if (data.success) {
+                    statusEl.textContent = data.message || '\u2713';
+                    statusEl.className   = 'nvq-grade-status mt-1 nvq-grade-saved';
+                    syncHeaderBadge(topicid, value);
+                    syncGradeReadonlyBadge(summary, value, comment, data.commentbyline);
+                    ensureClearButton(summary);
+                } else {
+                    statusEl.textContent = data.error || 'Error';
+                    statusEl.className   = 'nvq-grade-status mt-1 nvq-grade-error';
+                }
+                setTimeout(function () {
+                    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'nvq-grade-status mt-1'; }
+                }, 3000);
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error saving grade';
+                statusEl.className   = 'nvq-grade-status mt-1 nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            setSummaryLocked(summary, false);
+        });
+    }
+
+    /**
+     * Saves the grade comment on its own, via action=comment, without
+     * touching the verdict (value/gradedby/timemodified) at all. Used when
+     * the comment box is edited/blurred but no verdict button is currently
+     * active — e.g. after "Clear grade", so an assessor can still update or
+     * backdate the comment without being forced to also re-pick a verdict.
+     */
+    function saveGradeCommentOnly(summary) {
+        var comment      = (summary.querySelector('.nvq-grade-comment') || {}).value || '';
+        var commentdate  = (summary.querySelector('.nvq-grade-commentdate') || {}).value || '';
+        var topicid      = parseInt(summary.dataset.topicid, 10);
+        var studentid    = parseInt(summary.dataset.studentid, 10);
+        var courseid     = parseInt(summary.dataset.courseid, 10);
+        var statusEl     = summary.querySelector('.nvq-grade-status');
+
+        var matrix   = summary.closest('.block-nvq-matrix');
+        var gradeurl = matrix ? matrix.dataset.gradeurl : '';
+        var sesskey  = matrix ? matrix.dataset.sesskey  : '';
+
+        if (!gradeurl || !courseid) { return; }
+
+        setSummaryLocked(summary, true);
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-grade-status mt-1 nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams({
+            topicid     : topicid,
+            studentid   : studentid,
+            courseid    : courseid,
+            action      : 'comment',
+            comment     : comment,
+            commentdate : commentdate,
+            sesskey     : sesskey,
+        });
+
+        fetch(gradeurl, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (statusEl) {
+                statusEl.textContent = data.success
+                    ? (data.message || '\u2713')
+                    : (data.error || 'Error');
+                statusEl.className = 'nvq-grade-status mt-1 ' + (data.success ? 'nvq-grade-saved' : 'nvq-grade-error');
+                setTimeout(function () {
+                    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'nvq-grade-status mt-1'; }
+                }, 3000);
+            }
+            if (data.success) {
+                var activeBtn = summary.querySelector('.nvq-grade-btn--active');
+                var currentValue = activeBtn ? parseInt(activeBtn.dataset.value, 10) : null;
+                syncGradeReadonlyBadge(summary, currentValue, comment, data.commentbyline);
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error saving comment';
+                statusEl.className   = 'nvq-grade-status mt-1 nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            setSummaryLocked(summary, false);
+        });
+    }
+
+    /**
+     * Clears (removes) the unit's grade *verdict* via action=clear. The
+     * comment (and its own date/attribution) is deliberately left alone —
+     * grade and comment are independent fields; see clear_grade() in
+     * matrix_data.php.
+     */
+    function clearGrade(summary) {
+        var topicid   = parseInt(summary.dataset.topicid, 10);
+        var studentid = parseInt(summary.dataset.studentid, 10);
+        var courseid  = parseInt(summary.dataset.courseid, 10);
+        var statusEl  = summary.querySelector('.nvq-grade-status');
+
+        var matrix   = summary.closest('.block-nvq-matrix');
+        var gradeurl = matrix ? matrix.dataset.gradeurl : '';
+        var sesskey  = matrix ? matrix.dataset.sesskey  : '';
+
+        if (!gradeurl || !courseid) { return; }
+
+        setSummaryLocked(summary, true);
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-grade-status mt-1 nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams({
+            topicid   : topicid,
+            studentid : studentid,
+            courseid  : courseid,
+            action    : 'clear',
+            sesskey   : sesskey,
+        });
+
+        fetch(gradeurl, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                summary.querySelectorAll('.nvq-grade-btn').forEach(function (b) {
+                    b.classList.remove('nvq-grade-btn--active');
+                });
+                var clearBtn = summary.querySelector('.nvq-grade-clear');
+                if (clearBtn) { clearBtn.remove(); }
+                // Comment box is deliberately left untouched — clearing the
+                // verdict must never clear the comment (client-reported bug).
+                syncHeaderBadge(topicid, null);
+                var currentComment = (summary.querySelector('.nvq-grade-comment') || {}).value || '';
+                syncGradeReadonlyBadge(summary, null, currentComment);
+            }
+            if (statusEl) {
+                statusEl.textContent = data.success
+                    ? (data.message || '\u2713')
+                    : (data.error || 'Error');
+                statusEl.className = 'nvq-grade-status mt-1 ' + (data.success ? 'nvq-grade-saved' : 'nvq-grade-error');
+                setTimeout(function () {
+                    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'nvq-grade-status mt-1'; }
+                }, 3000);
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error clearing grade';
+                statusEl.className   = 'nvq-grade-status mt-1 nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            setSummaryLocked(summary, false);
+        });
+    }
+
+    /**
+     * Saves a comment attached to a single evidence item *occurrence*
+     * (identified by mmid — the specific item↔criterion link, since the
+     * same file can be linked to more than one criterion).
+     */
+    /**
+     * Updates (or creates, or removes) the read-only comment div for one
+     * evidence item after a successful save. Needed because v26.3.8's
+     * restructure made the read-only <div> and the editable <textarea>
+     * two separate elements (previously the same textarea served both
+     * roles, so nothing needed syncing) — without this, a freshly-typed
+     * comment would save correctly server-side but never appear once
+     * locked back down via "Done editing", since the read-only div either
+     * didn't exist yet (no prior comment at page load) or still held its
+     * old text.
+     *
+     * @param {HTMLTextAreaElement} textarea   The comment textarea just saved.
+     * @param {string} comment                 Server-confirmed saved text.
+     * @param {string} byline                  Pre-formatted "Name, date" string, or '' if comment is blank.
+     */
+    function syncItemCommentReadonly(textarea, comment, byline) {
+        var li = textarea.closest('.nvq-evidence-item');
+        if (!li) { return; }
+
+        var editrow    = textarea.closest('.nvq-item-comment-editrow');
+        var readonlydiv = li.querySelector('.nvq-item-comment-readonly');
+        var bylinediv    = li.querySelector('.nvq-comment-byline');
+
+        comment = comment || '';
+
+        if (comment.trim() === '') {
+            if (readonlydiv) { readonlydiv.remove(); }
+            if (bylinediv) { bylinediv.remove(); }
+            return;
+        }
+
+        if (!readonlydiv) {
+            readonlydiv = document.createElement('div');
+            readonlydiv.className = 'nvq-item-comment-readonly mt-1';
+            if (editrow && editrow.parentNode) {
+                editrow.parentNode.insertBefore(readonlydiv, editrow);
+            }
+        }
+        readonlydiv.textContent = comment;
+
+        if (byline) {
+            if (!bylinediv) {
+                bylinediv = document.createElement('div');
+                bylinediv.className = 'nvq-comment-byline mt-1';
+                readonlydiv.insertAdjacentElement('afterend', bylinediv);
+            }
+            bylinediv.textContent = '\u2014 ' + byline;
+        } else if (bylinediv) {
+            bylinediv.remove();
+        }
+    }
+
+    function saveItemComment(textarea) {
+        var mmid       = parseInt(textarea.dataset.mmid, 10);
+        var itemid     = parseInt(textarea.dataset.itemid, 10);
+        var studentid  = parseInt(textarea.dataset.studentid, 10);
+        var commenturl = textarea.dataset.commenturl;
+        var comment    = textarea.value || '';
+        var commentdateinput = textarea.closest('.nvq-evidence-item')
+            ? textarea.closest('.nvq-evidence-item').querySelector('.nvq-item-commentdate')
+            : null;
+        var commentdate = commentdateinput ? (commentdateinput.value || '') : '';
+        var statusEl   = textarea.parentElement ? textarea.parentElement.querySelector('.nvq-item-comment-status') : null;
+
+        var matrix   = textarea.closest('.block-nvq-matrix');
+        var sesskey  = matrix ? matrix.dataset.sesskey : '';
+
+        // courseid: pulled from the unit summary block, since the evidence
+        // row itself doesn't carry one.
+        var unitcard = textarea.closest('.nvq-unit-card');
+        var summary  = unitcard ? unitcard.querySelector('.nvq-unit-grade-summary') : null;
+        var courseid = summary ? parseInt(summary.dataset.courseid, 10) : 0;
+
+        if (!commenturl || !mmid || !itemid || !studentid || !courseid) { return; }
+
+        textarea.disabled = true;
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-item-comment-status mt-1 nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams({
+            mmid      : mmid,
+            itemid    : itemid,
+            studentid : studentid,
+            courseid  : courseid,
+            comment   : comment,
+            commentdate : commentdate,
+            sesskey   : sesskey,
+        });
+
+        fetch(commenturl, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (statusEl) {
+                if (data.success) {
+                    statusEl.textContent = '\u2713 ' + (data.message || 'Saved');
+                    statusEl.className   = 'nvq-item-comment-status mt-1 nvq-grade-saved';
+                } else {
+                    statusEl.textContent = data.error || 'Error';
+                    statusEl.className   = 'nvq-item-comment-status mt-1 nvq-grade-error';
+                }
+                setTimeout(function () {
+                    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'nvq-item-comment-status mt-1'; }
+                }, 3000);
+            }
+            if (data.success) {
+                syncItemCommentReadonly(textarea, data.comment, data.commentbyline);
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error saving';
+                statusEl.className   = 'nvq-item-comment-status mt-1 nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            textarea.disabled = false;
+        });
+    }
+
+    /**
+     * Mirrors syncItemCommentReadonly() for the IQA unit comment — rebuilds
+     * .nvq-unit-comment-readonly's contents (it toggles between a filled
+     * text+byline layout and a blank-dash placeholder, so this needs to
+     * touch more than one element, same as syncSampleReadonlyDisplay()).
+     */
+    function syncUnitCommentReadonly(summary, comment, byline) {
+        var readonly = summary.querySelector('.nvq-unit-comment-readonly');
+        if (!readonly) { return; }
+
+        comment = comment || '';
+
+        if (comment.trim() === '') {
+            readonly.innerHTML = '<span class="nvq-unit-comment-blank"></span>';
+            readonly.firstChild.textContent = '\u2014';
+            return;
+        }
+
+        var html = '<div class="nvq-unit-comment-text"></div>';
+        if (byline) {
+            html += '<div class="nvq-comment-byline mt-1"></div>';
+        }
+        readonly.innerHTML = html;
+        readonly.children[0].textContent = comment;
+        if (byline) {
+            readonly.children[1].textContent = '\u2014 ' + byline;
+        }
+    }
+
+    /**
+     * Saves the unit-level IQA comment. Independent of the sampling status
+     * and of the existing grade comment.
+     */
+    function saveUnitComment(textarea) {
+        var summary = textarea.closest('.nvq-unit-comment-summary');
+        if (!summary) { return; }
+
+        var topicid   = parseInt(summary.dataset.topicid, 10);
+        var studentid = parseInt(summary.dataset.studentid, 10);
+        var courseid  = parseInt(summary.dataset.courseid, 10);
+        var comment   = textarea.value || '';
+        var commentdateinput = summary.querySelector('.nvq-unit-commentdate');
+        var commentdate = commentdateinput ? (commentdateinput.value || '') : '';
+        var statusEl  = summary.querySelector('.nvq-unit-comment-status');
+
+        var matrix        = summary.closest('.block-nvq-matrix');
+        var unitcommenturl = matrix ? matrix.dataset.unitcommenturl : '';
+        var sesskey        = matrix ? matrix.dataset.sesskey : '';
+
+        if (!unitcommenturl || !topicid || !studentid || !courseid) { return; }
+
+        textarea.disabled = true;
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-unit-comment-status mt-1 nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams({
+            topicid   : topicid,
+            studentid : studentid,
+            courseid  : courseid,
+            comment   : comment,
+            commentdate : commentdate,
+            sesskey   : sesskey,
+        });
+
+        fetch(unitcommenturl, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (statusEl) {
+                if (data.success) {
+                    statusEl.textContent = '\u2713 ' + (data.message || 'Saved');
+                    statusEl.className   = 'nvq-unit-comment-status mt-1 nvq-grade-saved';
+                } else {
+                    statusEl.textContent = data.error || 'Error';
+                    statusEl.className   = 'nvq-unit-comment-status mt-1 nvq-grade-error';
+                }
+                setTimeout(function () {
+                    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'nvq-unit-comment-status mt-1'; }
+                }, 3000);
+            }
+            if (data.success) {
+                syncUnitCommentReadonly(summary, data.comment, data.commentbyline);
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error saving';
+                statusEl.className   = 'nvq-unit-comment-status mt-1 nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            textarea.disabled = false;
+        });
+    }
+
+    /**
+     * Saves the final Pass/Fail status for one course's box. Does NOT
+     * notify the student — that's a deliberately separate, always-confirmed
+     * action (sendCompletionNotification()).
+     */
+    function saveFinalStatus(box, status) {
+        var courseid   = parseInt(box.dataset.courseid, 10);
+        var studentid  = parseInt(box.dataset.studentid, 10);
+        var url        = box.dataset.finalstatusurl;
+        var sesskey    = box.dataset.sesskey;
+        var statusEl   = box.querySelector('.nvq-finalstatus-status');
+        var dateinput  = box.querySelector('.nvq-finalstatus-setdate');
+        var setdate    = dateinput ? (dateinput.value || '') : '';
+
+        if (!url || !courseid || !studentid) { return; }
+
+        box.dataset.saving = '1';
+        box.querySelectorAll('.nvq-finalstatus-btn, .nvq-finalstatus-clear, .nvq-finalstatus-notify').forEach(function (b) {
+            b.disabled = true;
+        });
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-finalstatus-status nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams({
+            studentid : studentid,
+            courseid  : courseid,
+            action    : 'set',
+            status    : status,
+            setdate   : setdate,
+            sesskey   : sesskey,
+        });
+
+        fetch(url, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                // Re-render is the simplest reliable way to reflect the new
+                // status/buttons/notify-button-appearing everywhere in the
+                // box, rather than hand-patching several bits of markup.
+                reloadPreservingEditMode(box);
+                return;
+            }
+            if (statusEl) {
+                statusEl.textContent = data.error || 'Error';
+                statusEl.className   = 'nvq-finalstatus-status nvq-grade-error';
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error saving status';
+                statusEl.className   = 'nvq-finalstatus-status nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            box.dataset.saving = '0';
+            box.querySelectorAll('.nvq-finalstatus-btn, .nvq-finalstatus-clear, .nvq-finalstatus-notify').forEach(function (b) {
+                b.disabled = false;
+            });
+        });
+    }
+
+    /**
+     * Clears the final status for one course's box entirely (back to "Not
+     * yet set"), after the caller has already confirmed via window.confirm()
+     * in the click delegate above.
+     */
+    function clearFinalStatus(box) {
+        var courseid  = parseInt(box.dataset.courseid, 10);
+        var studentid = parseInt(box.dataset.studentid, 10);
+        var url       = box.dataset.finalstatusurl;
+        var sesskey   = box.dataset.sesskey;
+        var statusEl  = box.querySelector('.nvq-finalstatus-status');
+
+        if (!url || !courseid || !studentid) { return; }
+
+        box.dataset.saving = '1';
+        box.querySelectorAll('.nvq-finalstatus-btn, .nvq-finalstatus-clear, .nvq-finalstatus-notify').forEach(function (b) {
+            b.disabled = true;
+        });
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-finalstatus-status nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams({
+            studentid : studentid,
+            courseid  : courseid,
+            action    : 'clear',
+            sesskey   : sesskey,
+        });
+
+        fetch(url, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                reloadPreservingEditMode(box);
+                return;
+            }
+            if (statusEl) {
+                statusEl.textContent = data.error || 'Error';
+                statusEl.className   = 'nvq-finalstatus-status nvq-grade-error';
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error clearing status';
+                statusEl.className   = 'nvq-finalstatus-status nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            box.dataset.saving = '0';
+            box.querySelectorAll('.nvq-finalstatus-btn, .nvq-finalstatus-clear, .nvq-finalstatus-notify').forEach(function (b) {
+                b.disabled = false;
+            });
+        });
+    }
+
+    /**
+     * Sends the completion notification for one course's box. Only ever
+     * called after the user has confirmed via window.confirm() in the
+     * click delegate above — this function itself does not ask again.
+     * Deliberately repeatable: no client-side check for "already sent".
+     */
+    function sendCompletionNotification(box) {
+        var courseid  = parseInt(box.dataset.courseid, 10);
+        var studentid = parseInt(box.dataset.studentid, 10);
+        var url       = box.dataset.finalstatusurl;
+        var sesskey   = box.dataset.sesskey;
+        var statusEl  = box.querySelector('.nvq-finalstatus-status');
+
+        if (!url || !courseid || !studentid) { return; }
+
+        box.dataset.saving = '1';
+        box.querySelectorAll('.nvq-finalstatus-btn, .nvq-finalstatus-clear, .nvq-finalstatus-notify').forEach(function (b) {
+            b.disabled = true;
+        });
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-finalstatus-status nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams({
+            studentid : studentid,
+            courseid  : courseid,
+            action    : 'notify',
+            sesskey   : sesskey,
+        });
+
+        fetch(url, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                reloadPreservingEditMode(box);
+                return;
+            }
+            if (statusEl) {
+                statusEl.textContent = data.error || 'Error';
+                statusEl.className   = 'nvq-finalstatus-status nvq-grade-error';
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error sending notification';
+                statusEl.className   = 'nvq-finalstatus-status nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            box.dataset.saving = '0';
+            box.querySelectorAll('.nvq-finalstatus-btn, .nvq-finalstatus-clear, .nvq-finalstatus-notify').forEach(function (b) {
+                b.disabled = false;
+            });
+        });
+    }
+
+    /**
+     * Saves the evidence type checkboxes for a single evidence item.
+     * Entirely independent of the item's comment — separate endpoint
+     * (evidence_type.php), separate DB write, no shared attribution.
+     *
+     * Takes the popover container (not a single checkbox) since a change
+     * to any one checkbox needs to resubmit the whole current selection —
+     * save_evidence_type() always replaces the full set server-side.
+     */
+    function saveEvidenceType(popover) {
+        if (!popover) { return; }
+
+        var mmid            = parseInt(popover.dataset.mmid, 10);
+        var itemid           = parseInt(popover.dataset.itemid, 10);
+        var studentid        = parseInt(popover.dataset.studentid, 10);
+        var evidencetypeurl  = popover.dataset.evidencetypeurl;
+        var checkboxes       = popover.querySelectorAll('.nvq-evidencetype-checkbox');
+        var checked          = Array.prototype.filter.call(checkboxes, function (cb) { return cb.checked; });
+        var selectedcodes    = checked.map(function (cb) { return cb.value; });
+        var selectedlabels   = checked.map(function (cb) {
+            var span = cb.nextElementSibling;
+            return span ? span.textContent : cb.value;
+        });
+
+        var wrap             = popover.closest('.nvq-evidencetype-wrap');
+        var statusEl         = wrap ? wrap.querySelector('.nvq-evidencetype-status') : null;
+        var valueEl          = wrap ? wrap.querySelector('.nvq-evidencetype-value') : null;
+
+        var matrix   = popover.closest('.block-nvq-matrix');
+        var sesskey  = matrix ? matrix.dataset.sesskey : '';
+
+        // courseid: pulled from the unit summary block, same as saveItemComment —
+        // the evidence type table doesn't carry one of its own.
+        var unitcard = popover.closest('.nvq-unit-card');
+        var summary  = unitcard ? unitcard.querySelector('.nvq-unit-grade-summary') : null;
+        var courseid = summary ? parseInt(summary.dataset.courseid, 10) : 0;
+
+        if (!evidencetypeurl || !mmid || !itemid || !studentid || !courseid) { return; }
+
+        checkboxes.forEach(function (cb) { cb.disabled = true; });
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-evidencetype-status nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams();
+        body.set('mmid', mmid);
+        body.set('itemid', itemid);
+        body.set('studentid', studentid);
+        body.set('courseid', courseid);
+        body.set('sesskey', sesskey);
+        selectedcodes.forEach(function (code) { body.append('evidencetype[]', code); });
+
+        fetch(evidencetypeurl, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success && valueEl) {
+                // Reflect the new choice in the display text immediately —
+                // the display span stays hidden behind the popover while
+                // edit mode is on, but this keeps it correct for the
+                // instant edit mode is switched off again, with no reload.
+                valueEl.textContent = selectedlabels.length ? selectedlabels.join(', ') : valueEl.dataset.notsettext;
+                valueEl.classList.toggle('nvq-evidencetype-value--unset', selectedlabels.length === 0);
+            }
+            if (statusEl) {
+                statusEl.textContent = data.success ? '\u2713' : (data.error || 'Error');
+                statusEl.className   = 'nvq-evidencetype-status ' + (data.success ? 'nvq-grade-saved' : 'nvq-grade-error');
+                setTimeout(function () {
+                    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'nvq-evidencetype-status'; }
+                }, 3000);
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error';
+                statusEl.className   = 'nvq-evidencetype-status nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            checkboxes.forEach(function (cb) { cb.disabled = false; });
+        });
+    }
+
+    /**
+     * Saves the unit-level sampling status dropdown.
+     */
+    function saveSampling(select) {
+        var summary   = select.closest('.nvq-unit-sample-summary');
+        if (!summary) { return; }
+
+        var topicid   = parseInt(summary.dataset.topicid, 10);
+        var studentid = parseInt(summary.dataset.studentid, 10);
+        var courseid  = parseInt(summary.dataset.courseid, 10);
+        var status    = parseInt(select.value, 10);
+        var statusEl  = summary.querySelector('.nvq-sample-status');
+
+        var matrix     = summary.closest('.block-nvq-matrix');
+        var sampleurl  = matrix ? matrix.dataset.sampleurl : '';
+        var sesskey    = matrix ? matrix.dataset.sesskey   : '';
+
+        if (!sampleurl || !courseid) { return; }
+
+        select.disabled = true;
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className   = 'nvq-sample-status mt-1 nvq-grade-saving';
+        }
+
+        var body = new URLSearchParams({
+            topicid   : topicid,
+            studentid : studentid,
+            courseid  : courseid,
+            status    : status,
+            sesskey   : sesskey,
+        });
+
+        fetch(sampleurl, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (statusEl) {
+                if (data.success) {
+                    statusEl.textContent = data.message || '\u2713';
+                    statusEl.className   = 'nvq-sample-status mt-1 nvq-grade-saved';
+                    syncHeaderSampleBadge(topicid, status);
+                    syncSampleReadonlyDisplay(summary, status);
+                } else {
+                    statusEl.textContent = data.error || 'Error';
+                    statusEl.className   = 'nvq-sample-status mt-1 nvq-grade-error';
+                }
+                setTimeout(function () {
+                    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'nvq-sample-status mt-1'; }
+                }, 3000);
+            }
+        })
+        .catch(function () {
+            if (statusEl) {
+                statusEl.textContent = 'Error saving';
+                statusEl.className   = 'nvq-sample-status mt-1 nvq-grade-error';
+            }
+        })
+        .finally(function () {
+            select.disabled = false;
+        });
+    }
+
+    /**
+     * Updates the compact sampling badge in the unit header after a save
+     * from the bottom summary dropdown, so both stay in sync.
+     */
+    function syncHeaderSampleBadge(topicid, status) {
+        var badge = document.querySelector('.nvq-header-sample-badge-' + topicid);
+        if (!badge) { return; }
+
+        badge.classList.remove(
+            'nvq-sample-badge--sampled',
+            'nvq-sample-badge--notyetsampled',
+            'nvq-sample-badge--blank'
+        );
+
+        if (status === 1) {
+            badge.classList.add('nvq-sample-badge--sampled');
+            badge.textContent = badge.dataset.sampledtext;
+        } else if (status === 2) {
+            badge.classList.add('nvq-sample-badge--notyetsampled');
+            badge.textContent = badge.dataset.notyetsampledtext;
+        } else {
+            badge.classList.add('nvq-sample-badge--blank');
+            badge.textContent = '';
+        }
+    }
+
+    /**
+     * Mirrors syncGradeReadonlyBadge() for the sampling read-only view —
+     * rebuilds the badge/blank-text markup inside .nvq-sample-readonly so
+     * re-locking via "Done editing" reflects the just-saved status without
+     * a page reload. Labels come from data-*text attributes rendered
+     * server-side onto .nvq-sample-readonly, not M.util.get_string() — see
+     * the comment on syncGradeReadonlyBadge() for why.
+     */
+    function syncSampleReadonlyDisplay(summary, status) {
+        var readonly = summary.querySelector('.nvq-sample-readonly');
+        if (!readonly) { return; }
+
+        if (status === 1) {
+            readonly.innerHTML = '<span class="nvq-sample-badge nvq-sample-badge--sampled"></span>';
+            readonly.firstChild.textContent = readonly.dataset.sampledtext;
+        } else if (status === 2) {
+            readonly.innerHTML = '<span class="nvq-sample-badge nvq-sample-badge--notyetsampled"></span>';
+            readonly.firstChild.textContent = readonly.dataset.notyetsampledtext;
+        } else {
+            readonly.innerHTML = '<span class="nvq-sample-readonly-blank"></span>';
+            readonly.firstChild.textContent = readonly.dataset.blanktext;
+        }
+    }
+
+    // Init after DOM ready.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initGrading);
+    } else {
+        initGrading();
+    }
+}());
+</script>
