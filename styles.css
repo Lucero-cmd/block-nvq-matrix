@@ -272,6 +272,22 @@
     display: none;
 }
 
+/* Same rule applies to Gap Analysis mode: .nvq-criteria-table and its
+   rows get an explicit `display: block` at <=500px (see the "Responsive
+   — stack columns" media query further down), which is equal-specificity
+   author CSS that beats the UA [hidden] rule at that width. Without this,
+   gap mode's row/table hiding would silently stop working on mobile only
+   — the exact same failure mode already documented above, just triggered
+   by a different rule. Also covers .nvq-unit-card, which has no explicit
+   display of its own today but is included for the same defence-in-depth
+   reason as the rest of this list. */
+.nvq-criteria-table[hidden],
+.nvq-criterion-row[hidden],
+.nvq-unit-card[hidden],
+.nvq-lo-header[hidden] {
+    display: none;
+}
+
 .nvq-completed-daterange {
     display: flex;
     align-items: center;
@@ -490,6 +506,33 @@
 
 .nvq-overall-bar {
     background: var(--nvq-primary);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 16px;
+    transition: width 0.5s var(--nvq-ease);
+    color: #fff;
+    white-space: nowrap;
+    text-align: right;
+    padding-right: 8px;
+    min-width: 2.2rem;
+}
+
+/* -----------------------------------------------------------------------
+   Assessor progress — sits directly under Overall progress. Same shape,
+   deliberately a different colour (info, not primary) so the two bars
+   read as two different questions at a glance: how much evidence is in,
+   vs how much of it has actually been graded.
+----------------------------------------------------------------------- */
+.nvq-assessor-progress {
+    background: var(--nvq-surface-muted);
+    border: 1px solid var(--nvq-border);
+    border-radius: var(--nvq-radius-md);
+    padding: 0.75rem 0.9rem;
+    margin-bottom: 0.9rem;
+}
+
+.nvq-assessor-bar {
+    background: var(--nvq-info);
     font-size: 0.68rem;
     font-weight: 600;
     line-height: 16px;
@@ -890,6 +933,65 @@
 .nvq-editmode-toggle--active:hover {
     background-color: var(--nvq-primary-dark);
     border-color: var(--nvq-primary-dark);
+    color: #fff;
+}
+
+/* ------------------------------------------------------------------ */
+/* Gap Analysis toggle                                                 */
+/* ------------------------------------------------------------------ */
+
+.nvq-gapmode-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.85rem;
+}
+
+.nvq-gapmode-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.45rem 0.9rem;
+    border-radius: var(--nvq-radius-pill);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: var(--nvq-surface);
+    color: var(--nvq-ink-soft);
+    box-shadow: var(--nvq-shadow-sm);
+    transition: all 0.15s var(--nvq-ease);
+}
+
+.nvq-gapmode-toggle:hover {
+    border-color: var(--nvq-warning);
+    color: var(--nvq-warning);
+}
+
+.nvq-gapmode-toggle--active {
+    background-color: var(--nvq-warning);
+    border-color: var(--nvq-warning);
+    color: #fff;
+    box-shadow: var(--nvq-shadow-md);
+}
+
+.nvq-gapmode-toggle--active:hover {
+    background-color: var(--nvq-warning);
+    border-color: var(--nvq-warning);
+    color: #fff;
+}
+
+.nvq-gapmode-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.1rem 0.5rem;
+    border-radius: var(--nvq-radius-pill);
+    background-color: var(--nvq-warning-bg);
+    color: var(--nvq-warning);
+}
+
+.nvq-gapmode-toggle--active .nvq-gapmode-badge {
+    background-color: rgba(255, 255, 255, 0.25);
     color: #fff;
 }
 

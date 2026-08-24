@@ -59,7 +59,23 @@
 
     {{#hasunits}}
 
-    {{! Overall progress }}
+    {{! Gap Analysis toggle — a pure display filter over data already
+        computed above (unitgaps/hasgaps per unit), so it can never
+        disagree with the matrix's own evidenced/not-evidenced state.
+        Shown to every viewer (assessor, IQA, or the student themselves) —
+        it's read-only and doesn't depend on any edit capability. }}
+    <div class="nvq-gapmode-bar">
+        <button type="button" class="btn btn-outline-secondary btn-sm nvq-gapmode-toggle" aria-pressed="false">
+            <span class="nvq-gapmode-toggle-label"
+                  data-gaplabel="{{#str}}gapanalysis, block_nvq_matrix{{/str}}"
+                  data-alllabel="{{#str}}gapanalysisdone, block_nvq_matrix{{/str}}">{{#str}}gapanalysis, block_nvq_matrix{{/str}}</span>
+            {{#hasanygaps}}
+            <span class="nvq-gapmode-badge">{{#str}}gapanalysisbadge, block_nvq_matrix, {{totalgaps}}{{/str}}</span>
+            {{/hasanygaps}}
+        </button>
+    </div>
+
+    {{! Overall progress — evidence submitted by the student }}
     <div class="nvq-overall-progress">
         <div class="nvq-progress-label">{{overalltext}}</div>
         <div class="progress nvq-progress-bar-outer"
@@ -73,9 +89,26 @@
         </div>
     </div>
 
+    {{! Assessor progress — units actually graded (Competent/Not Yet),
+        independent of evidence volume. Directly under student progress
+        per design: two different questions ("how much evidence is in?"
+        vs "how much of it has been assessed?"). }}
+    <div class="nvq-assessor-progress">
+        <div class="nvq-progress-label">{{assessorprogresstext}}</div>
+        <div class="progress nvq-progress-bar-outer"
+             role="progressbar"
+             aria-valuenow="{{assessorprogresspct}}"
+             aria-valuemin="0"
+             aria-valuemax="100">
+            <div class="progress-bar nvq-assessor-bar" style="width: {{assessorprogresspct}}%">
+                {{assessorprogresspct}}%
+            </div>
+        </div>
+    </div>
+
     {{! One collapsible card per Unit }}
     {{#units}}
-    <div class="nvq-unit-card" data-topicid="{{topicid}}">
+    <div class="nvq-unit-card" data-topicid="{{topicid}}" data-gaps="{{unitgaps}}">
 
         <div class="nvq-unit-header"
              role="button"
@@ -570,6 +603,93 @@ function nvqToggleUnit(header) {
     }
 }
 
+/**
+ * Gap Analysis toggle. Pure display filter, loop-based, over DOM state
+ * that's already correct (data-gaps on each .nvq-unit-card, and the
+ * .nvq-row-gap class already applied server-side to every criterion row
+ * with no evidence — see matrix.mustache's criteria-table markup). No
+ * new data is fetched or computed here; this only shows/hides what's
+ * already rendered, so it can never drift out of sync with the matrix
+ * itself or introduce a new evidence-scoping bug.
+ *
+ * On: units with zero gaps are hidden entirely; units with at least one
+ * gap are force-expanded (if not already) and, within them, only rows
+ * missing evidence stay visible — any LO group/table left with zero
+ * visible rows is hidden too, so a fully-evidenced LO group doesn't sit
+ * there empty.
+ * Off: everything is restored to visible; expand/collapse state from
+ * before entering gap mode is left as-is (non-destructive), matching
+ * this template's existing edit-mode toggle behaviour.
+ */
+function nvqToggleGapMode(matrix, toggleBtn) {
+    var active = matrix.classList.toggle('nvq-gapmode');
+
+    toggleBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    toggleBtn.classList.toggle('nvq-gapmode-toggle--active', active);
+    var label = toggleBtn.querySelector('.nvq-gapmode-toggle-label');
+    if (label) {
+        label.textContent = active ? label.dataset.alllabel : label.dataset.gaplabel;
+    }
+
+    var unitCards = matrix.querySelectorAll('.nvq-unit-card');
+    for (var i = 0; i < unitCards.length; i++) {
+        var card   = unitCards[i];
+        var gaps   = parseInt(card.dataset.gaps, 10) || 0;
+        var header = card.querySelector('.nvq-unit-header');
+        var body   = card.querySelector('.nvq-unit-body');
+
+        if (active) {
+            if (gaps === 0) {
+                card.hidden = true;
+                continue;
+            }
+            card.hidden = false;
+
+            // Force this unit open so its gaps are visible without an
+            // extra click, but only if it isn't already open — reuses
+            // nvqToggleUnit() itself so aria-expanded/chevron/class state
+            // stay in perfect sync with manual expand/collapse.
+            if (header && header.getAttribute('aria-expanded') !== 'true') {
+                nvqToggleUnit(header);
+            }
+
+            var rows = card.querySelectorAll('.nvq-criterion-row');
+            for (var j = 0; j < rows.length; j++) {
+                rows[j].hidden = !rows[j].classList.contains('nvq-row-gap');
+            }
+
+            // Hide any LO group (table + its preceding header) left with
+            // zero visible rows, so a fully-evidenced LO doesn't show an
+            // empty table under a unit that has gaps elsewhere.
+            var tables = card.querySelectorAll('.nvq-criteria-table');
+            for (var k = 0; k < tables.length; k++) {
+                var visiblerows = tables[k].querySelectorAll('.nvq-criterion-row:not([hidden])');
+                var isempty     = (visiblerows.length === 0);
+                tables[k].hidden = isempty;
+                var loheader = tables[k].previousElementSibling;
+                if (loheader && loheader.classList.contains('nvq-lo-header')) {
+                    loheader.hidden = isempty;
+                }
+            }
+        } else {
+            card.hidden = false;
+
+            var allrows = card.querySelectorAll('.nvq-criterion-row');
+            for (var m = 0; m < allrows.length; m++) {
+                allrows[m].hidden = false;
+            }
+            var alltables = card.querySelectorAll('.nvq-criteria-table');
+            for (var n = 0; n < alltables.length; n++) {
+                alltables[n].hidden = false;
+            }
+            var loheaders = card.querySelectorAll('.nvq-lo-header');
+            for (var p = 0; p < loheaders.length; p++) {
+                loheaders[p].hidden = false;
+            }
+        }
+    }
+}
+
     /**
      * Single global switch for every editable comment field and evidence
      * type dropdown on the page. Individual fields still save themselves
@@ -827,6 +947,13 @@ function nvqToggleUnit(header) {
                 // Storage unavailable - nothing to restore, page just
                 // loads locked as before.
             }
+        }
+
+        var gapmodetoggle = matrix.querySelector('.nvq-gapmode-toggle');
+        if (gapmodetoggle) {
+            gapmodetoggle.addEventListener('click', function () {
+                nvqToggleGapMode(matrix, gapmodetoggle);
+            });
         }
 
         initStudentPicker(matrix);

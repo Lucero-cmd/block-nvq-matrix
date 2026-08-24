@@ -17,6 +17,49 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.5.0 (1.19.0) — Two new read-only display features, both built as
+ *   pure derivations of data this plugin already fetches and already
+ *   renders elsewhere on the page — neither adds a query, a table, or a
+ *   capability, so this is a release-string/version bump with no schema
+ *   or capability change.
+ *
+ *   (1) Gap Analysis toggle: a button above the Overall progress bar that
+ *       filters the matrix down to only what's missing evidence. Units
+ *       with zero gaps are hidden entirely; units with gaps are
+ *       force-expanded and, within them, only the ungraded/unevidenced
+ *       criterion rows stay visible (any LO group left empty by that
+ *       filtering is hidden too). Implemented as a loop-based JS toggle
+ *       (nvqToggleGapMode()) over DOM state that's already correct —
+ *       every criterion row already carries the .nvq-row-gap class
+ *       server-side (matrix.mustache, pre-existing), and each unit card
+ *       now also carries data-gaps="{{unitgaps}}" (matrix_data.php::build(),
+ *       unitcriteria - unitmet, arithmetic only, no new query). This
+ *       deliberately avoids CSS :has()-based filtering in favour of an
+ *       explicit loop, matching how nvqToggleUnit()/toggleEditMode()
+ *       already work in this file. Visible to every viewer (assessor,
+ *       IQA, and the student themselves) since it's read-only and
+ *       doesn't depend on any edit capability.
+ *       BUG AVOIDED, not just fixed: styles.css already documents (see
+ *       the "BUG FIX" comment near .nvq-student-list[hidden] etc.) that
+ *       the `hidden` attribute alone doesn't hide an element once any
+ *       author rule gives it an explicit `display` — and the existing
+ *       "Responsive — stack columns" media query does exactly that to
+ *       .nvq-criteria-table and its rows at <=500px. Added explicit
+ *       [hidden] overrides for .nvq-criteria-table, .nvq-criterion-row,
+ *       .nvq-unit-card, and .nvq-lo-header up front, before this ever
+ *       shipped, rather than waiting to hit it on a phone in the field.
+ *   (2) Assessor progress bar: a second bar directly under the existing
+ *       Overall (evidence) progress bar, showing what share of this
+ *       student's units have actually been GRADED (a Competent/Not Yet
+ *       Competent verdict saved), independent of how much evidence has
+ *       been submitted. Deliberately unit-level, matching this plugin's
+ *       existing unit-level grading model (v17+): "5 units, 4 graded =
+ *       80%", not a criterion count. Computed by looping the already-built
+ *       $unitsdata array in matrix_data.php::build() and counting
+ *       'gradeisset' (already merged into every row by the existing
+ *       build_unit_grade_row()) — no new query, and it can never disagree
+ *       with what each unit's own grade badge already shows.
+ *
  * v26.4.26 (1.18.3) — CHANGE: portfolio export now includes ONLY evidence
  *   linked to a competence - the "unlinked evidence" section (assessment
  *   intros, untagged uploads, etc.) is removed entirely, per client
@@ -1682,7 +1725,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082103;
+$plugin->version   = 2026082400;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -1697,4 +1740,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.18.3';
+$plugin->release   = '1.19.0';

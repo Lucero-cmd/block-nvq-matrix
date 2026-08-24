@@ -110,6 +110,10 @@ class matrix_data {
                 'overallpct'    => 0,
                 'totalmet'      => 0,
                 'totaltotal'    => 0,
+                'totalgaps'     => 0,
+                'hasanygaps'    => false,
+                'assessorprogresstext' => '',
+                'assessorprogresspct'  => 0,
                 'hasunits'      => false,
                 'nostudentdata' => false,
                 'nodatastring'  => '',
@@ -167,6 +171,10 @@ class matrix_data {
                 'overallpct'    => 0,
                 'totalmet'      => 0,
                 'totaltotal'    => 0,
+                'totalgaps'     => 0,
+                'hasanygaps'    => false,
+                'assessorprogresstext' => '',
+                'assessorprogresspct'  => 0,
                 'hasunits'      => false,
                 'nostudentdata' => true,
                 'nodatastring'  => get_string('nodata', 'block_nvq_matrix'),
@@ -611,6 +619,16 @@ class matrix_data {
 
             $progresspct = $unitcriteria > 0 ? round(($unitmet / $unitcriteria) * 100) : 0;
 
+            // Gap analysis: a "gap" is simply a criterion in this unit with
+            // no evidence linked yet — the exact inverse of $unitmet, which
+            // is already computed correctly above (including the orphan-row
+            // pass below). No new query needed; this is pure arithmetic on
+            // data already fetched, which keeps gap analysis immune to the
+            // list-vs-content scoping bugs this plugin has hit before (see
+            // handover §9) since it can never diverge from what the matrix
+            // itself already shows as evidenced/not.
+            $unitgaps = $unitcriteria - $unitmet;
+
             if (!empty($logroups)) {
                 $unitsdata[] = [
                     'topicid'      => $topic->id,
@@ -624,6 +642,8 @@ class matrix_data {
                     'progresspct'  => $progresspct,
                     'unitmet'      => $unitmet,
                     'unittotal'    => $unitcriteria,
+                    'unitgaps'     => $unitgaps,
+                    'hasgaps'      => $unitgaps > 0,
                 ] + self::build_unit_grade_row(
                     $topic->id,
                     $studentid,
@@ -653,6 +673,31 @@ class matrix_data {
         }
 
         $overallpct = $totalcriteria > 0 ? round(($totalmet / $totalcriteria) * 100) : 0;
+        $totalgaps  = $totalcriteria - $totalmet;
+
+        // ----------------------------------------------------------------
+        // Assessor progress: what share of this student's units have
+        // actually been GRADED (a Competent or Not Yet Competent verdict
+        // saved via build_unit_grade_row() above), independent of how much
+        // evidence has been submitted. Deliberately unit-level, matching
+        // this plugin's existing unit-level grading model (v17+) rather
+        // than counting individual criteria — "5 units, 4 graded = 80%",
+        // not a criterion-count. Loops over $unitsdata (already built
+        // above, one entry per unit that actually has content to show) so
+        // this can never disagree with what's rendered on the page, and
+        // needs no extra DB query since 'gradeisset' is already merged
+        // into every row by build_unit_grade_row().
+        // ----------------------------------------------------------------
+        $totalgradableunits = count($unitsdata);
+        $gradedunits         = 0;
+        foreach ($unitsdata as $unitrow) {
+            if (!empty($unitrow['gradeisset'])) {
+                $gradedunits++;
+            }
+        }
+        $assessorprogresspct = $totalgradableunits > 0
+            ? round(($gradedunits / $totalgradableunits) * 100)
+            : 0;
 
         // ----------------------------------------------------------------
         // Final Pass/Fail status boxes — one per distinct course this
@@ -741,6 +786,13 @@ class matrix_data {
             'overallpct'    => $overallpct,
             'totalmet'      => $totalmet,
             'totaltotal'    => $totalcriteria,
+            'totalgaps'     => $totalgaps,
+            'hasanygaps'    => $totalgaps > 0,
+            'assessorprogresstext' => get_string('assessorprogress', 'block_nvq_matrix', [
+                'graded' => $gradedunits,
+                'total'  => $totalgradableunits,
+            ]),
+            'assessorprogresspct'  => $assessorprogresspct,
             'hasunits'      => !empty($unitsdata),
             'nostudentdata' => false,
             'nodatastring'  => '',
