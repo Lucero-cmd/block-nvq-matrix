@@ -57,23 +57,60 @@
     </div>
     {{/portfoliolinks}}
 
-    {{#hasunits}}
-
-    {{! Gap Analysis toggle — a pure display filter over data already
-        computed above (unitgaps/hasgaps per unit), so it can never
-        disagree with the matrix's own evidenced/not-evidenced state.
-        Shown to every viewer (assessor, IQA, or the student themselves) —
-        it's read-only and doesn't depend on any edit capability. }}
-    <div class="nvq-gapmode-bar">
-        <button type="button" class="btn btn-outline-secondary btn-sm nvq-gapmode-toggle" aria-pressed="false">
-            <span class="nvq-gapmode-toggle-label"
+    {{! Compact dashboard row — small circular Gap Analysis stat tile and
+        the Export Portfolio action, grouped together above Overall/
+        Assessor progress. Rendered whenever either tile has something
+        to show (showdashboardrow is computed in view.php as
+        hasunits || showexportbutton, since export can be available
+        even before/without unit content and previously always showed
+        regardless of hasunits — this preserves that).
+        Gap tile: pure display filter over data already computed above
+        (unitgaps/hasgaps per unit, totalgaps/hasanygaps overall) — can
+        never disagree with the matrix's own evidenced/not-evidenced
+        state. Still a real <button> (not a div) so it stays keyboard/
+        screen-reader operable, since it still performs an action
+        (toggling gap mode via the unchanged nvqToggleGapMode()).
+        Export tile: same export.php action as the old topbar link
+        (view.php builds exporturl/exportconfirmmsg identically, just
+        renders here instead of in the page topbar), now a real <a> so
+        the browser's native navigation/target handling still works,
+        with the confirm() dialog moved to a data-confirm attribute +
+        JS listener (wired below) instead of an inline onclick, since
+        inline handlers don't have a natural place in a compiled
+        mustache template. }}
+    {{#showdashboardrow}}
+    <div class="nvq-dashboard-row">
+        {{#hasunits}}
+        {{#hasanygaps}}
+        <button type="button" class="nvq-dash-tile nvq-gapmode-tile nvq-gapmode-toggle" aria-pressed="false">
+            <span class="nvq-dash-tile-circle" aria-hidden="true">{{totalgaps}}</span>
+            <span class="nvq-dash-tile-label"
                   data-gaplabel="{{#str}}gapanalysis, block_nvq_matrix{{/str}}"
                   data-alllabel="{{#str}}gapanalysisdone, block_nvq_matrix{{/str}}">{{#str}}gapanalysis, block_nvq_matrix{{/str}}</span>
-            {{#hasanygaps}}
-            <span class="nvq-gapmode-badge">{{#str}}gapanalysisbadge, block_nvq_matrix, {{totalgaps}}{{/str}}</span>
-            {{/hasanygaps}}
         </button>
+        {{/hasanygaps}}
+        {{^hasanygaps}}
+        <div class="nvq-dash-tile nvq-gapmode-tile nvq-dash-tile--success">
+            <span class="nvq-dash-tile-circle" aria-hidden="true">0</span>
+            <span class="nvq-dash-tile-label">{{#str}}nogapsremaining, block_nvq_matrix{{/str}}</span>
+        </div>
+        {{/hasanygaps}}
+        {{/hasunits}}
+
+        {{#showexportbutton}}
+        <a href="{{exporturl}}" class="nvq-dash-tile nvq-export-tile" data-confirm="{{exportconfirmmsg}}">
+            <span class="nvq-dash-tile-circle nvq-dash-tile-circle--icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" width="16" height="16" focusable="false">
+                    <path fill="currentColor" d="M10 2a1 1 0 0 1 1 1v8.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L9 11.6V3a1 1 0 0 1 1-1zM4 15a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1z"/>
+                </svg>
+            </span>
+            <span class="nvq-dash-tile-label">{{#str}}exportportfolio, block_nvq_matrix{{/str}}</span>
+        </a>
+        {{/showexportbutton}}
     </div>
+    {{/showdashboardrow}}
+
+    {{#hasunits}}
 
     {{! Overall progress — evidence submitted by the student }}
     <div class="nvq-overall-progress">
@@ -626,7 +663,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
 
     toggleBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
     toggleBtn.classList.toggle('nvq-gapmode-toggle--active', active);
-    var label = toggleBtn.querySelector('.nvq-gapmode-toggle-label');
+    var label = toggleBtn.querySelector('.nvq-dash-tile-label');
     if (label) {
         label.textContent = active ? label.dataset.alllabel : label.dataset.gaplabel;
     }
@@ -953,6 +990,22 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         if (gapmodetoggle) {
             gapmodetoggle.addEventListener('click', function () {
                 nvqToggleGapMode(matrix, gapmodetoggle);
+            });
+        }
+
+        // Export Portfolio tile — same export.php navigation as before,
+        // just moved from a page-level topbar link (built in view.php)
+        // into this dashboard row. The confirm dialog moved from an
+        // inline onclick to a data-confirm attribute + this listener,
+        // since a compiled mustache template has no clean place to
+        // inject a PHP-built JS string as an inline handler.
+        var exporttile = matrix.querySelector('.nvq-export-tile');
+        if (exporttile) {
+            exporttile.addEventListener('click', function (e) {
+                var msg = exporttile.getAttribute('data-confirm');
+                if (msg && !window.confirm(msg)) {
+                    e.preventDefault();
+                }
             });
         }
 

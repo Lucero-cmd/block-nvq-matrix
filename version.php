@@ -17,6 +17,63 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.5.2 (1.19.2) — Gap Analysis panel shrunk further: from the
+ *   full-width dashboard card (v26.5.1) down to a small circular tile
+ *   (count inside the circle, label beside it) grouped into a new
+ *   compact .nvq-dashboard-row alongside a new Export Portfolio tile.
+ *   Export Portfolio moved from view.php's page-level topbar link (a
+ *   plain html_writer::link with an inline onclick=confirm(...)) into
+ *   this same dashboard row inside the matrix template — same
+ *   export.php destination, same capability/student gating, same
+ *   confirm-dialog message, just relocated and re-rendered as an icon+
+ *   label tile. The confirm dialog itself moved from an inline onclick
+ *   attribute to a data-confirm attribute read by a JS click listener,
+ *   since a compiled mustache template can't cleanly embed a PHP-built
+ *   inline handler string.
+ *   $templatedata gains three new keys, set in view.php AFTER
+ *   matrix_data::build() returns (not inside build() itself, since
+ *   export capability/URL building is page-level, not matrix-data):
+ *   showexportbutton, exporturl, exportconfirmmsg. Also
+ *   showdashboardrow = hasunits || showexportbutton, so the row (and
+ *   therefore the export tile) still renders even when hasunits is
+ *   false — matching the OLD topbar link's gating, which only checked
+ *   capability + a selected student, never hasunits. Getting this
+ *   wrong would have been a real regression: nesting the whole row
+ *   under {{#hasunits}} would silently hide Export Portfolio for any
+ *   student with zero unit content, something the old topbar link
+ *   never did.
+ *   No schema/capability change — release-string/version bump only.
+ *   Verified: mustache section balance, div/button/anchor tag balance,
+ *   CSS brace balance, PHP brace/paren/bracket balance on view.php too
+ *   (not just the template/CSS/lang files touched in v26.5.0/26.5.1),
+ *   and a repo-wide grep confirming zero remaining references to every
+ *   class name this round retired (.nvq-gapmode-dashboard and its
+ *   .nvq-gapmode-dash-* children, .nvq-export-link) in any .php,
+ *   .mustache, or .css file.
+ *
+ * v26.5.1 (1.19.1) — Gap Analysis panel redesigned from a small pill
+ *   toggle-button into a full-width dashboard stat card (icon + count +
+ *   label), moved to sit as the very first element inside the matrix
+ *   content, above Overall/Assessor progress (same general area as
+ *   before, just restyled and made the leading element). Still a real
+ *   <button> when there are gaps to filter (nvqToggleGapMode() unchanged
+ *   in behaviour — only its DOM structure/CSS classes moved from
+ *   .nvq-gapmode-toggle-label/.nvq-gapmode-bar/.nvq-gapmode-badge to
+ *   .nvq-gapmode-dash-label/.nvq-gapmode-dashboard/.nvq-gapmode-dash-*),
+ *   kept as a button rather than a div specifically so it stays
+ *   keyboard/screen-reader operable despite the "not a button" visual
+ *   request — it still performs an action. Zero-gaps state now renders
+ *   as a separate static (non-interactive) success-styled panel instead
+ *   of a disabled/empty badge, since there's nothing left to filter.
+ *   Assessor progress bar colour changed from info (blue) to success
+ *   (green) per request — one-line CSS var swap on .nvq-assessor-bar.
+ *   No schema/capability change — release-string/version bump only.
+ *   Verified: mustache section balance, div/button tag balance (same
+ *   pre-existing 1-div file-wide imbalance as v26.4.26/v26.5.0,
+ *   unrelated to this change), CSS brace balance, and grep confirmed no
+ *   leftover references anywhere to the old class names the JS/CSS
+ *   could still be pointing at.
+ *
  * v26.5.0 (1.19.0) — Two new read-only display features, both built as
  *   pure derivations of data this plugin already fetches and already
  *   renders elsewhere on the page — neither adds a query, a table, or a
@@ -1725,7 +1782,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082400;
+$plugin->version   = 2026082402;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -1740,4 +1797,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.19.0';
+$plugin->release   = '1.19.2';

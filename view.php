@@ -742,33 +742,43 @@ $templatedata = matrix_data::build(
 // ----------------------------------------------------------------
 echo $OUTPUT->header();
 
-// Print page-level "back to dashboard" link, plus the export button when
-// a specific student's matrix is actually on screen (nothing to export
-// from the idle "no student selected yet" state) and the current user
-// holds the teacher-only export capability.
+// Print page-level "back to dashboard" link. The export-portfolio and
+// assessor-manage links used to live here too; export moved into the
+// matrix template's dashboard row (see below), assessor-manage stays
+// here since it's not part of that row's design.
 $topbar = html_writer::link(
     new moodle_url('/my/'),
     '&#8592; ' . get_string('backtodashboard', 'block_nvq_matrix'),
     ['class' => 'nvq-back-link']
 );
 
+// Export Portfolio is now rendered inside the matrix template's compact
+// dashboard row (alongside the Gap Analysis tile) rather than as a
+// page-level topbar link — same capability/student gating and the same
+// export.php destination + confirm-dialog message as before, just
+// handed to the template instead of built as an html_writer::link here.
+$templatedata['showexportbutton'] = false;
 if ($canexportportfolio && $studentid) {
     $exporturl = new moodle_url('/blocks/nvq_matrix/export.php', [
         'studentid' => $studentid,
         'sesskey'   => sesskey(),
     ]);
     $exportstudent = $students[$studentid] ?? $DB->get_record('user', ['id' => $studentid]);
-    $topbar .= html_writer::link(
-        $exporturl,
-        get_string('exportportfolio', 'block_nvq_matrix'),
-        [
-            'class' => 'nvq-export-link btn btn-secondary',
-            'onclick' => 'return confirm(' . json_encode(
-                get_string('exportportfolioconfirm', 'block_nvq_matrix', fullname($exportstudent))
-            ) . ');',
-        ]
+    $templatedata['showexportbutton'] = true;
+    $templatedata['exporturl']        = $exporturl->out(false);
+    $templatedata['exportconfirmmsg'] = get_string(
+        'exportportfolioconfirm',
+        'block_nvq_matrix',
+        fullname($exportstudent)
     );
 }
+
+// The dashboard row (Gap Analysis tile + Export Portfolio tile) should
+// render whenever either has something to show — export could be
+// available even when hasunits is false (e.g. it was previously shown
+// regardless of unit content, gated only on capability + a selected
+// student), so this deliberately isn't just $templatedata['hasunits'].
+$templatedata['showdashboardrow'] = $templatedata['hasunits'] || $templatedata['showexportbutton'];
 
 if ($canmanageassessor) {
     $topbar .= html_writer::link(
