@@ -17,6 +17,94 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.5.4 (1.19.4) — REAL BUG FIX, reported by Lucero after testing
+ *   v26.5.3: company managers could see archived (unenrolled) students
+ *   who were never in their own group, and separately, some students
+ *   who WERE still enrolled - just in a different group - were wrongly
+ *   showing up as archived at all. Two distinct bugs in the same
+ *   archived-detection code, both matching the "list correctly scoped,
+ *   detail view underneath not" leak pattern already seen once before
+ *   in this plugin (v26.4.25).
+ *   Bug 1 (misclassification): the "is this student currently enrolled"
+ *   check reused $studentcourseids, which is built from the enrolled
+ *   list AFTER company-manager group filtering already removed anyone
+ *   outside the viewer's own group. So a student enrolled but simply in
+ *   a DIFFERENT group looked "not currently enrolled" from that check's
+ *   point of view, and got shown as archived (unenrolled) - even though
+ *   they were never unenrolled at all, just invisible to this
+ *   particular manager. Fixed with a new $trueenrolledcourseids, built
+ *   from the RAW enrolled list before any group filtering, used only
+ *   for this specific "genuinely not enrolled" check.
+ *   Bug 2 (the actual cross-company leak): the archived-detection query
+ *   itself had NO group scoping at all - it scanned every student with
+ *   leftover grade/sampling/comment/status rows across every course the
+ *   viewer holds :viewall on, so a genuinely unenrolled student from an
+ *   UNRELATED company could still surface in any company manager's
+ *   archived list. Fixed by pre-fetching each group-restricted viewer's
+ *   own current group membership per course ($viewergroupidsbycourse ->
+ *   $viewergroupmembersbycourse, one query per course, not per archived
+ *   student - avoids an N+1 pattern), then excluding any archived
+ *   candidate not found in it.
+ *   Deliberately fails CLOSED, not open: if an archived student's group
+ *   membership can no longer be verified at all (their groups_members
+ *   row may itself have been cleaned up on unenrollment), they're
+ *   EXCLUDED from the company manager's archived list rather than
+ *   shown - matching this plugin's already-established v26.4.24 rule
+ *   ("no group on a course = sees nobody") rather than inventing a new,
+ *   looser exception for the archived case specifically. A full
+ *   teacher/admin viewer (not group-restricted) sees archived students
+ *   exactly as before - both fixes only take effect when the current
+ *   viewer is a company manager on that specific course.
+ *   No schema/capability change - release-string/version bump only.
+ *   Verified: PHP brace/paren/bracket balance; traced every remaining
+ *   read of $studentcourseids after the fix to confirm the two
+ *   deliberately-still-group-filtered uses (picker-row resolution,
+ *   active-student-row building) were left untouched and only the
+ *   archived-detection "currently enrolled" check was switched to the
+ *   new unfiltered variable; confirmed $viewergroupmembersbycourse is
+ *   fully built before the conditional block that reads it, so no
+ *   undefined-variable risk.
+ *
+ * v26.5.3 (1.19.3) — REAL BUG FIX (not in original scope, reported by
+ *   Lucero after testing v26.5.2): a student enrolled in more than one
+ *   NVQ-mapped course had every course's units blended into a single
+ *   matrix on their own "My Matrix" page, and Overall/Assessor progress
+ *   computed across both courses combined instead of per-course. Root
+ *   cause: view.php's plain-student branch always passed
+ *   $resolvedcourseid = 0 into matrix_data::build(), and build()'s own
+ *   topicid resolution treats oncoursepage=false (0 is falsy) as "no
+ *   specific course requested" — the same unscoped, all-courses query
+ *   path that's CORRECTLY used for the idle/legacy case, but wrong for
+ *   a student who actually has more than one course's data. Assessors/
+ *   IQAs never hit this - their per-student+course selector rows always
+ *   resolved a real courseid already.
+ *   Fix: the plain-student branch now looks up which courses this
+ *   student actually has NVQ competence data on (same 2-table exacomp
+ *   join as build()'s existing unscoped fallback query, plus a third
+ *   join to pull courseid out of it), and always resolves to ONE real
+ *   course - defaulting to the alphabetically-first when none is
+ *   explicitly chosen, exactly like a one-course student already had
+ *   implicitly. When there's more than one, a small course-switcher
+ *   (plain pill links, ?nvq_matrix_course=X) now appears above the
+ *   portfolio panel so the student can move between them - each course
+ *   now renders its own separate matrix and its own separate Overall/
+ *   Assessor progress, never blended.
+ *   Verified NOT a new information-leak risk: the scoped topicid query
+ *   this now routes students through is the SAME one already shipped
+ *   and trusted for the assessor/IQA per-student+course view - it scopes
+ *   by course structure only, with actual evidence/grade data always
+ *   separately filtered by $studentid everywhere downstream, unchanged.
+ *   Also verified: $studentcourseids/$coursenamesbyid are re-declared
+ *   inside the plain-student branch with a genuinely different shape
+ *   than the canviewall branch's version of the same variable names -
+ *   grepped every read of both across the whole file to confirm the two
+ *   branches never cross-read each other's shape (they're mutually
+ *   exclusive per request, but worth checking given the name reuse).
+ *   No schema/capability change - release-string/version bump only.
+ *   Verified: PHP brace/paren/bracket balance (view.php), mustache
+ *   section balance, div/anchor/span tag balance in the template, CSS
+ *   brace balance.
+ *
  * v26.5.2 (1.19.2) — Gap Analysis panel shrunk further: from the
  *   full-width dashboard card (v26.5.1) down to a small circular tile
  *   (count inside the circle, label beside it) grouped into a new
@@ -1782,7 +1870,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082402;
+$plugin->version   = 2026082404;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -1797,4 +1885,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.19.2';
+$plugin->release   = '1.19.4';

@@ -154,10 +154,40 @@ if ($canviewall) {
     // per-student+course picker rows built further down.
     $courses        = $enrolledcourses;
     $students       = [];
-    $studentcourseids = []; // userid => [courseid, ...] - drives the per-course rows below.
+    $studentcourseids = []; // userid => [courseid, ...] - GROUP-FILTERED
+                             // for a company manager viewer (drives the
+                             // per-course rows below - what they're
+                             // actually allowed to see).
+    $trueenrolledcourseids = []; // userid => [courseid, ...] - UNFILTERED
+                                  // by any group restriction, unlike
+                                  // $studentcourseids above. Used below
+                                  // for the archived-detection "is this
+                                  // student currently enrolled at all"
+                                  // check - using the group-filtered
+                                  // version there was a real bug: a
+                                  // student enrolled but simply outside a
+                                  // company manager's group was wrongly
+                                  // treated as "not currently enrolled"
+                                  // and shown to that manager as archived
+                                  // (unenrolled), when they're actually
+                                  // just enrolled under a different group
+                                  // this manager doesn't oversee.
     $viewallcourseids = []; // courseid => true, for scoping the status lookup query.
     $coursenamesbyid = []; // courseid => fullname, for building one row per student+course pair.
     $contextbycourseid = []; // courseid => context - reused below for the archived-detection viewall check.
+    $viewergroupidsbycourse = []; // courseid => [groupid, ...] - the
+                                   // CURRENT viewer's own groups on that
+                                   // course, only set when the viewer is
+                                   // group-restricted there (company
+                                   // manager). Hoisted out of this loop so
+                                   // archived-detection further down can
+                                   // ALSO group-scope who's allowed to
+                                   // see an archived row - previously
+                                   // completely unscoped, a second, more
+                                   // serious leak: even a genuinely
+                                   // unenrolled student from an unrelated
+                                   // company could surface in any company
+                                   // manager's archived list.
     foreach ($courses as $course) {
         $ctx = context_course::instance($course->id);
         if (!has_capability('block/nvq_matrix:viewall', $ctx)) {
@@ -167,6 +197,13 @@ if ($canviewall) {
         $coursenamesbyid[(int) $course->id] = format_string($course->fullname);
         $contextbycourseid[(int) $course->id] = $ctx;
         $enrolled = get_enrolled_users($ctx, '', 0, $namefields, 'u.lastname ASC, u.firstname ASC');
+
+        // Captured from the RAW enrolled list, before any group
+        // filtering below - this is "true enrollment", independent of
+        // which of them THIS viewer happens to be allowed to see.
+        foreach ($enrolled as $u) {
+            $trueenrolledcourseids[$u->id][] = (int) $course->id;
+        }
 
         // Company Manager role (hardcoded by shortname, this is a fully
         // custom site plugin) is restricted to only the students who
@@ -185,6 +222,7 @@ if ($canviewall) {
         if (in_array('companymanager', $viewerroleshortnames, true)) {
             $usergroups = groups_get_user_groups($course->id, $USER->id);
             $groupids = $usergroups[0] ?? [];
+            $viewergroupidsbycourse[(int) $course->id] = $groupids;
             if (empty($groupids)) {
                 $enrolled = [];
             } else {
@@ -204,6 +242,21 @@ if ($canviewall) {
                 $studentcourseids[$u->id][] = (int) $course->id;
             }
         }
+    }
+
+    // For every course where the CURRENT viewer is group-restricted,
+    // pre-fetch the full current membership of their OWN group(s) once
+    // per course (not once per archived student below - avoids an N+1
+    // query pattern over what could be a long archived list).
+    $viewergroupmembersbycourse = []; // courseid => [userid => true]
+    foreach ($viewergroupidsbycourse as $vcid => $vgroupids) {
+        if (empty($vgroupids)) {
+            $viewergroupmembersbycourse[$vcid] = [];
+            continue;
+        }
+        list($vginsql, $vgparams) = $DB->get_in_or_equal($vgroupids, SQL_PARAMS_NAMED, 'vgrp');
+        $vmemberids = $DB->get_fieldset_select('groups_members', 'userid', "groupid $vginsql", $vgparams);
+        $viewergroupmembersbycourse[$vcid] = array_flip($vmemberids);
     }
 
     // ------------------------------------------------------------
@@ -280,7 +333,13 @@ if ($canviewall) {
         foreach ($presencerows as $row) {
             $sid = (int) $row->studentid;
             $cid = (int) $row->courseid;
-            $currentlyenrolled = in_array($cid, $studentcourseids[$sid] ?? [], true);
+            // Uses the UNFILTERED true-enrollment list, not the
+            // group-filtered $studentcourseids - see the declaration
+            // comment above for why using the filtered version here was
+            // a real misclassification bug (an enrolled-but-different-
+            // group student wrongly showing as archived to a company
+            // manager who isn't over their group).
+            $currentlyenrolled = in_array($cid, $trueenrolledcourseids[$sid] ?? [], true);
             if ($currentlyenrolled) {
                 continue;
             }
@@ -294,6 +353,21 @@ if ($canviewall) {
             // finds them fine, just filtered out of $studentcourseids
             // for the same reason a co-teacher never appears there.
             if (isset($contextbycourseid[$cid]) && has_capability('block/nvq_matrix:viewall', $contextbycourseid[$cid], $sid)) {
+                continue;
+            }
+            // Company-manager group scoping for ARCHIVED rows - the
+            // actual leak this fix exists for. Only reached when the
+            // current viewer is group-restricted on this specific course
+            // (isset() is false for a full teacher/admin, who sees every
+            // archived student exactly as before). If this now-
+            // unenrolled student isn't in $viewergroupmembersbycourse
+            // (either they never were in the viewer's group, or their
+            // groups_members row was itself cleaned up on unenrollment),
+            // exclude them - fail closed, matching this plugin's already
+            // -established "no group = sees nobody" rule for company
+            // managers (v26.4.24), rather than fail open and leak an
+            // unrelated company's unenrolled student into this list.
+            if (isset($viewergroupmembersbycourse[$cid]) && !isset($viewergroupmembersbycourse[$cid][$sid])) {
                 continue;
             }
             $archivedpairs[$sid][] = $cid;
@@ -404,10 +478,79 @@ if ($canviewall) {
     }
 
 } else {
-    // Students see only their own matrix.
+    // Students see only their own matrix, but scoped to ONE course at a
+    // time - previously $resolvedcourseid was hardcoded to 0 here, which
+    // makes matrix_data::build() take its unscoped "all courses this
+    // student has eportfolio data on" query path (see build()'s topicid
+    // resolution: oncoursepage is (bool) $resolvedcourseid, so 0 always
+    // meant unscoped). A student enrolled in more than one NVQ-mapped
+    // course got every course's units silently blended into one matrix,
+    // AND Overall/Assessor progress computed across both combined -
+    // reported as "mixing up units" between courses. Fix: resolve to a
+    // single real course, same as the assessor/IQA path above already
+    // does per student+course row.
     $studentid = $USER->id;
-    $resolvedcourseid = 0;
     $students  = [];
+
+    // Distinct courses this student actually has NVQ competence data
+    // linked in - joins through the same three exacomp tables build()'s
+    // own unscoped fallback query already uses, just adding the topic
+    // -> course link (block_exacompcoutopi_mm) to get courseid out of it
+    // instead of only topicid.
+    $studentcourseids = $DB->get_fieldset_sql("
+        SELECT DISTINCT ct.courseid
+          FROM {block_exacompcompuser_mm} mm
+          JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
+          JOIN {block_exacompcoutopi_mm} ct ON ct.topicid = dtm.topicid
+         WHERE mm.userid         = :userid
+           AND mm.eportfolioitem = 1
+    ", ['userid' => $studentid]);
+    $studentcourseids = array_map('intval', $studentcourseids);
+
+    $coursenamesbyid = [];
+    if (!empty($studentcourseids)) {
+        $courserecords = $DB->get_records_list('course', 'id', $studentcourseids, '', 'id, fullname');
+        foreach ($courserecords as $c) {
+            $coursenamesbyid[(int) $c->id] = format_string($c->fullname);
+        }
+        // Alphabetical, so both the default course picked below and the
+        // switcher's link order are stable/predictable rather than
+        // whatever order the DB happened to return them in.
+        asort($coursenamesbyid, SORT_STRING | SORT_FLAG_CASE);
+        $studentcourseids = array_keys($coursenamesbyid);
+    }
+
+    if (empty($studentcourseids)) {
+        // No NVQ-mapped course at all - unchanged from before, falls
+        // through to build()'s unscoped query, which will correctly
+        // resolve to "no data" since there is none.
+        $resolvedcourseid = 0;
+    } elseif ($selectedcourseid && in_array($selectedcourseid, $studentcourseids, true)) {
+        $resolvedcourseid = $selectedcourseid;
+    } else {
+        // No course chosen (or an invalid/stale one) - default to the
+        // first alphabetically rather than leaving this at 0, since 0
+        // is exactly what re-triggers the unscoped "blend everything"
+        // query this fix exists to avoid. A one-course student always
+        // lands here too, so their experience is unchanged.
+        $resolvedcourseid = $studentcourseids[0];
+    }
+
+    // Course switcher - only rendered when there's actually more than
+    // one course to switch between, so a typical single-course student
+    // sees no change in the page at all.
+    $templatedata_courseswitcher = [];
+    if (count($studentcourseids) > 1) {
+        foreach ($studentcourseids as $cid) {
+            $switchurl = new moodle_url('/blocks/nvq_matrix/view.php', ['nvq_matrix_course' => $cid]);
+            $templatedata_courseswitcher[] = [
+                'courseid'   => $cid,
+                'coursename' => $coursenamesbyid[$cid] ?? '',
+                'courseurl'  => $switchurl->out(false),
+                'iscurrent'  => ($cid === $resolvedcourseid),
+            ];
+        }
+    }
 }
 
 // ----------------------------------------------------------------
@@ -725,17 +868,24 @@ $templatedata = matrix_data::build(
                                // final-status boxes) to just that course,
                                // instead of the student's entire history
                                // across every course. A plain student
-                               // viewing their own matrix always has
-                               // $resolvedcourseid = 0, so this stays
-                               // false for them - unchanged, still shows
-                               // everything, which is fine since it's
-                               // their own data.
+                               // viewing their own matrix now also
+                               // resolves to a real course id (see the
+                               // else branch above) rather than always
+                               // 0 - fixing units/progress from more than
+                               // one NVQ-mapped course silently blending
+                               // together on their own matrix page.
     $resolvedcourseid,
     $cangrade,           // cangrade: its own capability (block/nvq_matrix:grade) — editingteacher/manager only.
     $cansample,          // cansample: its own capability (block/nvq_matrix:sample) — editingteacher/manager only.
     $caniqacomment,      // caniqacomment: block/nvq_matrix:iqacomment — teacher (IQA), editingteacher, manager.
     $canfinalstatus      // canfinalstatus: block/nvq_matrix:finalstatus — editingteacher, manager.
 );
+
+// Course switcher only exists for the plain-student branch above (a
+// canviewall assessor/IQA already switches course via the main student+
+// course selector), so this is empty/false for every other viewer.
+$templatedata['courseswitcher']     = $templatedata_courseswitcher ?? [];
+$templatedata['showcourseswitcher'] = !empty($templatedata['courseswitcher']);
 
 // ----------------------------------------------------------------
 // Output.
