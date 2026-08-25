@@ -42,6 +42,31 @@
     </div>
     {{/canviewall}}
 
+    {{! Course switcher — only for a student viewing their OWN matrix
+        while they have more than one NVQ-mapped course (either actively
+        enrolled, or archived — see below; an assessor/IQA already
+        switches course via the selector above, this never renders for
+        them). Plain links, not a form, since switching is just a GET
+        param (?nvq_matrix_course=X) — matches how the assessor's
+        per-course selector rows work.
+        A course only reachable via past evidence (no longer actively
+        enrolled) is flagged isarchived and labelled accordingly, rather
+        than either disappearing entirely or looking identical to an
+        active course — this is the student's own equivalent of the
+        teacher-side archived-students feature. }}
+    {{#showcourseswitcher}}
+    <div class="nvq-course-switcher">
+        {{#courseswitcher}}
+        {{#iscurrent}}
+        <span class="nvq-course-switcher-link nvq-course-switcher-link--current{{#isarchived}} nvq-course-switcher-link--archived{{/isarchived}}">{{coursename}}{{#isarchived}} ({{#str}}statusarchived, block_nvq_matrix{{/str}}){{/isarchived}}</span>
+        {{/iscurrent}}
+        {{^iscurrent}}
+        <a href="{{courseurl}}" class="nvq-course-switcher-link{{#isarchived}} nvq-course-switcher-link--archived{{/isarchived}}">{{coursename}}{{#isarchived}} ({{#str}}statusarchived, block_nvq_matrix{{/str}}){{/isarchived}}</a>
+        {{/iscurrent}}
+        {{/courseswitcher}}
+    </div>
+    {{/showcourseswitcher}}
+
     {{! Assessment Plan / Sampling Plan / Sampling Record links, one panel
         per course this student's matrix touches. Only present when
         local_nvqportfolio is installed and configured for that course —

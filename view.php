@@ -492,12 +492,43 @@ if ($canviewall) {
     $studentid = $USER->id;
     $students  = [];
 
-    // Distinct courses this student actually has NVQ competence data
-    // linked in - joins through the same three exacomp tables build()'s
-    // own unscoped fallback query already uses, just adding the topic
-    // -> course link (block_exacompcoutopi_mm) to get courseid out of it
-    // instead of only topicid.
-    $studentcourseids = $DB->get_fieldset_sql("
+    // Two separate sources, combined - this is the actual fix for
+    // "other courses aren't showing": the previous version only found a
+    // course via existing EVIDENCE (eportfolioitem=1 rows), so a course
+    // the student is freshly enrolled in with zero evidence submitted
+    // yet never appeared at all - it looked identical to not being
+    // enrolled there.
+    //
+    // Source 1 - ACTIVE: every course this student is currently actively
+    // enrolled in (enrol_get_users_courses(..., true) - Moodle's own
+    // enrolment-status/date-aware API, not a hand-rolled query) that
+    // also has an NVQ competence structure mapped at all
+    // (block_exacompcoutopi_mm). Deliberately NOT gated on having any
+    // evidence yet - a brand new student with a blank matrix still needs
+    // to see and be able to start it.
+    $activeenrolledcourses = enrol_get_users_courses($studentid, true);
+    $activecourseids = array_keys($activeenrolledcourses);
+    $mappedactivecourseids = [];
+    if (!empty($activecourseids)) {
+        list($acidinsql, $acidparams) = $DB->get_in_or_equal($activecourseids, SQL_PARAMS_NAMED, 'acid');
+        $mappedactivecourseids = $DB->get_fieldset_select(
+            'block_exacompcoutopi_mm',
+            'DISTINCT courseid',
+            "courseid $acidinsql",
+            $acidparams
+        );
+    }
+    $mappedactivecourseids = array_map('intval', $mappedactivecourseids);
+
+    // Source 2 - the student's OWN archived courses: courses with actual
+    // eportfolio evidence linked for this student, even if they're no
+    // longer actively enrolled there. Without this, unenrolling a
+    // student from a course would silently hide their own historical
+    // portfolio from themselves the moment Source 1 above went live -
+    // mirrors the teacher-side archived-students feature (v26.4.13),
+    // just from the student's own point of view instead of a viewall
+    // assessor's.
+    $evidencecourseids = $DB->get_fieldset_sql("
         SELECT DISTINCT ct.courseid
           FROM {block_exacompcompuser_mm} mm
           JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
@@ -505,7 +536,11 @@ if ($canviewall) {
          WHERE mm.userid         = :userid
            AND mm.eportfolioitem = 1
     ", ['userid' => $studentid]);
-    $studentcourseids = array_map('intval', $studentcourseids);
+    $evidencecourseids = array_map('intval', $evidencecourseids);
+
+    // Archived = has evidence, but not in the active list above.
+    $archivedcourseidsforstudent = array_diff($evidencecourseids, $mappedactivecourseids);
+    $studentcourseids = array_unique(array_merge($mappedactivecourseids, $evidencecourseids));
 
     $coursenamesbyid = [];
     if (!empty($studentcourseids)) {
@@ -529,16 +564,24 @@ if ($canviewall) {
         $resolvedcourseid = $selectedcourseid;
     } else {
         // No course chosen (or an invalid/stale one) - default to the
-        // first alphabetically rather than leaving this at 0, since 0
-        // is exactly what re-triggers the unscoped "blend everything"
-        // query this fix exists to avoid. A one-course student always
-        // lands here too, so their experience is unchanged.
-        $resolvedcourseid = $studentcourseids[0];
+        // first ACTIVE course alphabetically (falling back to the first
+        // archived one only if every course is archived), rather than
+        // leaving this at 0, since 0 is exactly what re-triggers the
+        // unscoped "blend everything" query this fix exists to avoid. A
+        // one-course student always lands here too, so their experience
+        // is unchanged.
+        $defaultpool = array_values(array_intersect($studentcourseids, $mappedactivecourseids));
+        $resolvedcourseid = $defaultpool[0] ?? $studentcourseids[0];
     }
 
     // Course switcher - only rendered when there's actually more than
     // one course to switch between, so a typical single-course student
-    // sees no change in the page at all.
+    // sees no change in the page at all. Each entry is flagged
+    // 'isarchived' when it's only reachable via Source 2 above (no
+    // longer actively enrolled) - answers "what happens to the student's
+    // own archived course" directly: it still appears here, clearly
+    // labelled, rather than either disappearing or looking identical to
+    // an active one.
     $templatedata_courseswitcher = [];
     if (count($studentcourseids) > 1) {
         foreach ($studentcourseids as $cid) {
@@ -548,6 +591,7 @@ if ($canviewall) {
                 'coursename' => $coursenamesbyid[$cid] ?? '',
                 'courseurl'  => $switchurl->out(false),
                 'iscurrent'  => ($cid === $resolvedcourseid),
+                'isarchived' => in_array($cid, $archivedcourseidsforstudent, true),
             ];
         }
     }

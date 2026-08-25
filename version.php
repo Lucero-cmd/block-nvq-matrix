@@ -17,6 +17,46 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.5.5 (1.19.5) — REAL BUG FIX, reported by Lucero after testing
+ *   v26.5.3's course-scoping fix live: a student's OTHER course had
+ *   stopped appearing on their own matrix page at all. Root cause: the
+ *   query added in v26.5.3 to detect "which courses does this student
+ *   have a matrix for" only matched courses where the student already
+ *   had EVIDENCE linked (eportfolioitem=1 rows) - so a course they were
+ *   freshly enrolled in, with a matrix set up but zero evidence
+ *   submitted yet, looked indistinguishable from not being enrolled
+ *   there at all, and silently never made it into the course switcher.
+ *   Fix: course detection is now enrolment-based first
+ *   (enrol_get_users_courses($studentid, true) - Moodle's own active-
+ *   enrolment API, not hand-rolled SQL) intersected with which courses
+ *   actually have an NVQ structure mapped (block_exacompcoutopi_mm),
+ *   deliberately NOT gated on having any evidence yet.
+ *   This raised a second, related question during review (asked by
+ *   Lucero directly: "what happens to the student view under
+ *   archive?") - an enrolment-only fix would have made a course the
+ *   student was LATER unenrolled from disappear from their own switcher
+ *   entirely, hiding their own historical portfolio from themselves.
+ *   Fixed by keeping the v26.5.3 evidence-based query too, as a second
+ *   source: any course with evidence but no longer in the active list
+ *   is marked archived (isarchived) and still shown in the switcher,
+ *   visually muted with an "(Archived)" label (reusing the existing
+ *   statusarchived string) rather than either disappearing or looking
+ *   identical to an active course - this is the student's own
+ *   equivalent of the teacher-side archived-students feature (v26.4.13),
+ *   just seen from the student's own point of view instead of a
+ *   viewall assessor's. Default course selection prefers an active
+ *   course over an archived one whenever the student has both.
+ *   Deliberately scoped to the plain-student branch only, per explicit
+ *   instruction not to alter other role views - the canviewall/company-
+ *   manager branch (and its own separate archived-detection fixed in
+ *   v26.5.4) is untouched by this change.
+ *   No schema/capability change - release-string/version bump only.
+ *   Verified: PHP brace/paren/bracket balance, mustache section balance,
+ *   confirmed enrol_get_users_courses() is a standard Moodle core
+ *   function (lib/enrollib.php) with no capability check needed for a
+ *   user viewing their own enrolments, and traced that this entire
+ *   change sits inside the `else` (non-canviewall) branch only.
+ *
  * v26.5.4 (1.19.4) — REAL BUG FIX, reported by Lucero after testing
  *   v26.5.3: company managers could see archived (unenrolled) students
  *   who were never in their own group, and separately, some students
@@ -1870,7 +1910,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082404;
+$plugin->version   = 2026082405;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -1885,4 +1925,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.19.4';
+$plugin->release   = '1.19.5';

@@ -480,6 +480,62 @@
 }
 
 /* -----------------------------------------------------------------------
+   Course switcher — student's own matrix, more than one NVQ-mapped
+   course. Same pill-link visual language as the portfolio links above,
+   just with a distinct "current" state instead of every link looking
+   the same.
+----------------------------------------------------------------------- */
+.nvq-course-switcher {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.nvq-course-switcher-link {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--nvq-border-strong);
+    border-radius: var(--nvq-radius-sm);
+    background-color: var(--nvq-surface);
+    color: var(--nvq-primary);
+    text-decoration: none;
+    transition: border-color 0.15s var(--nvq-ease), background-color 0.15s var(--nvq-ease),
+        transform 0.15s var(--nvq-ease);
+}
+
+.nvq-course-switcher-link:hover {
+    background-color: var(--nvq-primary-light);
+    border-color: var(--nvq-accent);
+    color: var(--nvq-primary-dark);
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+.nvq-course-switcher-link--current {
+    border-color: var(--nvq-primary);
+    background-color: var(--nvq-primary);
+    color: #fff;
+    font-weight: 600;
+    cursor: default;
+}
+
+/* Archived (student's own — no longer actively enrolled, only reachable
+   via past evidence) — muted, so it visually reads as "past", not equal
+   standing with an active course, whether or not it's the current one. */
+.nvq-course-switcher-link--archived {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+.nvq-course-switcher-link--current.nvq-course-switcher-link--archived {
+    background-color: var(--nvq-ink-muted);
+    border-color: var(--nvq-ink-muted);
+}
+
+/* -----------------------------------------------------------------------
    Overall progress
 ----------------------------------------------------------------------- */
 .nvq-overall-progress {
