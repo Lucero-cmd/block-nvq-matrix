@@ -362,6 +362,44 @@
     background-color: var(--nvq-primary-light);
 }
 
+/* Wraps an archived row's <a> alongside its Delete button — only
+   rendered when the viewer holds block/nvq_matrix:deletearchived on
+   that specific course (see view.php), so a plain row without this
+   permission stays a bare <a>, unaffected by any of this. */
+.nvq-student-row-wrap {
+    display: flex;
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+.nvq-student-row-wrap .nvq-student-row {
+    flex: 1 1 auto;
+}
+
+.nvq-archived-delete-btn {
+    flex: 0 0 auto;
+    align-self: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.4rem 0.7rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-danger);
+    background-color: var(--nvq-surface);
+    color: var(--nvq-danger);
+    cursor: pointer;
+    transition: background-color 0.15s var(--nvq-ease), color 0.15s var(--nvq-ease);
+}
+
+.nvq-archived-delete-btn:hover {
+    background-color: var(--nvq-danger);
+    color: #fff;
+}
+
+.nvq-archived-delete-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
 .nvq-student-row-name {
     font-weight: 600;
     color: var(--nvq-ink);

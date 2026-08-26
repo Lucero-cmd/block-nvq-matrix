@@ -173,4 +173,22 @@ $capabilities = [
             'manager'        => CAP_ALLOW,
         ],
     ],
+    // Capability to permanently delete an ARCHIVED (no longer actively
+    // enrolled) student's NVQ matrix data for a specific course — grades,
+    // sampling records, unit comments, final status, and their evidence
+    // comments/types. This is genuinely destructive and irreversible, so
+    // deliberately excludes the 'teacher' archetype (IQA/EQA reviewers on
+    // this site) for the same reason as :grade/:sample/:finalstatus —
+    // this is a management action, not a review action. The endpoint
+    // this gates (delete_archived.php) independently re-verifies the
+    // target is genuinely archived before deleting anything, regardless
+    // of who holds this capability.
+    'block/nvq_matrix:deletearchived' => [
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes'   => [
+            'editingteacher' => CAP_ALLOW,
+            'manager'        => CAP_ALLOW,
+        ],
+    ],
 ];

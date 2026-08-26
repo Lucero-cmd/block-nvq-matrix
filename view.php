@@ -538,6 +538,21 @@ if ($canviewall) {
     ", ['userid' => $studentid]);
     $evidencecourseids = array_map('intval', $evidencecourseids);
 
+    // A teacher/manager permanently deleting this student's matrix data
+    // for an archived course (delete_archived.php,
+    // block/nvq_matrix:deletearchived) deliberately never touches the
+    // underlying exacomp/exaport evidence queried above - this plugin
+    // never modifies third-party data. Without this exclusion, a
+    // "deleted" archived course would still show up here forever, since
+    // the evidence that makes it detectable was never actually removed.
+    $clearedcourseids = $DB->get_fieldset_select(
+        'block_nvq_matrix_cleared_archive',
+        'courseid',
+        'studentid = :studentid',
+        ['studentid' => $studentid]
+    );
+    $evidencecourseids = array_diff($evidencecourseids, array_map('intval', $clearedcourseids));
+
     // Archived = has evidence, but not in the active list above.
     $archivedcourseidsforstudent = array_diff($evidencecourseids, $mappedactivecourseids);
     $studentcourseids = array_unique(array_merge($mappedactivecourseids, $evidencecourseids));
@@ -872,7 +887,7 @@ if ($canviewall && (!empty($students) || !empty($archivedrows))) {
             }
         }
 
-        $html .= html_writer::link($rowurl, $rowcontent, [
+        $rowlink = html_writer::link($rowurl, $rowcontent, [
             'class'              => $rowclass,
             'data-status'        => $data['bucket'],
             'data-name'          => $searchtext,
@@ -880,6 +895,40 @@ if ($canviewall && (!empty($students) || !empty($archivedrows))) {
             'role'               => 'option',
             'aria-selected'      => $isactive ? 'true' : 'false',
         ]);
+
+        // Delete (archived only) - a real capability check, separate
+        // from :viewall (seeing the archived list doesn't mean being
+        // allowed to permanently destroy it), so this button only
+        // renders for a viewer who genuinely holds
+        // block/nvq_matrix:deletearchived on THIS row's specific
+        // course. The confirm dialog + actual delete call are wired in
+        // matrix.mustache's script, mirroring the export tile's
+        // data-confirm pattern.
+        $showdelete = $data['bucket'] === 'archived'
+            && isset($contextbycourseid[$data['courseid']])
+            && has_capability('block/nvq_matrix:deletearchived', $contextbycourseid[$data['courseid']]);
+
+        if ($showdelete) {
+            $deletebtn = html_writer::tag('button', get_string('deletearchived', 'block_nvq_matrix'), [
+                'type'  => 'button',
+                'class' => 'nvq-archived-delete-btn',
+                'data-userid'   => $data['userid'],
+                'data-courseid' => $data['courseid'],
+                'data-confirm'  => get_string('deletearchivedconfirm', 'block_nvq_matrix', [
+                    'name'       => $data['name'],
+                    'coursename' => $data['coursename'],
+                ]),
+            ]);
+            // Wrapped only when there's actually a delete button to sit
+            // beside — a plain row stays a bare <a>, unchanged, so this
+            // never risks the row-filtering JS above (which already
+            // matches .nvq-student-row regardless of nesting depth, but
+            // there's no reason to add a wrapper div for every row when
+            // only archived-with-permission ones need one).
+            $html .= html_writer::div($rowlink . $deletebtn, 'nvq-student-row-wrap');
+        } else {
+            $html .= $rowlink;
+        }
     }
     $html .= html_writer::div(
         get_string('nostudentsmatch', 'block_nvq_matrix'),

@@ -2156,12 +2156,39 @@ class matrix_data {
                 continue;
             }
 
-            // The real fix: only a course this student is actually
-            // enrolled in is eligible, regardless of how many other
-            // courses happen to share the same topics.
+            // Only a course this student has a genuine presence on is
+            // eligible, regardless of how many other courses happen to
+            // share the same topics.
+            //
+            // REAL BUG FIXED HERE: this used to require ACTIVE enrollment
+            // only (is_enrolled(..., true)), so an archived student's
+            // Assessment Plan/Sampling Plan/Sampling Record links
+            // disappeared entirely the moment they were unenrolled - even
+            // though nothing about their actual NVQ matrix data changed.
+            // Now also allows a course they have historical presence on
+            // (a row in this plugin's own grades/sampling/unit_comments/
+            // status tables), the same signal already trusted for the
+            // archived-students feature itself and for the matching
+            // final-status-box fix (v26.5.6) - not just current
+            // enrollment.
             try {
                 $coursecontext = \context_course::instance($courseid, IGNORE_MISSING);
-                if (!$coursecontext || !is_enrolled($coursecontext, $studentid, '', true)) {
+                if (!$coursecontext) {
+                    continue;
+                }
+                $haspresence = is_enrolled($coursecontext, $studentid, '', true);
+                if (!$haspresence) {
+                    $haspresence = $DB->record_exists('block_nvq_matrix_grades', [
+                        'studentid' => $studentid, 'courseid' => $courseid,
+                    ]) || $DB->record_exists('block_nvq_matrix_sampling', [
+                        'studentid' => $studentid, 'courseid' => $courseid,
+                    ]) || $DB->record_exists('block_nvq_matrix_unit_comments', [
+                        'studentid' => $studentid, 'courseid' => $courseid,
+                    ]) || $DB->record_exists('block_nvq_matrix_status', [
+                        'studentid' => $studentid, 'courseid' => $courseid,
+                    ]);
+                }
+                if (!$haspresence) {
                     continue;
                 }
             } catch (\Throwable $e) {

@@ -114,6 +114,24 @@
         <INDEX NAME="studentid-courseid" UNIQUE="true" FIELDS="studentid, courseid" COMMENT="One final status per student per course."/>
       </INDEXES>
     </TABLE>
+    <TABLE NAME="block_nvq_matrix_cleared_archive" COMMENT="Marks a student+course pair as permanently cleared from the archived-students view, WITHOUT touching the underlying exacomp/exaport evidence (third-party, never modified by this plugin). Written by delete_archived.php whenever an archived student's block_nvq_matrix data (grades/sampling/comments/status/evidence comments) is permanently deleted - the student's own course switcher (view.php) excludes any courseid found here from its archived-course detection, since that detection is otherwise based purely on exaport evidence presence, which is deliberately left untouched by the delete action. If the student is later actively re-enrolled on this course, this marker has no effect on the ACTIVE-enrollment detection path - only suppresses the archived one.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The student whose archived entry was cleared."/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The specific course this clearing applies to."/>
+        <FIELD NAME="timecleared" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Unix timestamp the data was deleted/cleared."/>
+        <FIELD NAME="clearedby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The user (editingteacher/manager, per block/nvq_matrix:deletearchived) who performed the deletion."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+        <KEY NAME="clearedby" TYPE="foreign" FIELDS="clearedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="studentid-courseid" UNIQUE="true" FIELDS="studentid, courseid" COMMENT="One clearing record per student per course - a later delete on the same pair just updates timecleared/clearedby rather than accumulating duplicate rows."/>
+      </INDEXES>
+    </TABLE>
     <TABLE NAME="block_nvq_matrix_evidence_types" COMMENT="Evidence type classification(s) for a single evidence item occurrence (one row per selected type). One evidence item can genuinely fit more than one type (e.g. both Observation and Professional Discussion), so this is a proper one-to-many child table of block_nvq_matrix_evidence_comments rather than a single column - deliberately NOT joined directly against the main evidence query when building the matrix (that would multiply/misalign the parent evidence row once per matching type row); always fetched as a separate keyed lookup and merged in PHP, same pattern already used for block_nvq_matrix_sampling.">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>

@@ -17,6 +17,80 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.0 (1.20.0) — REAL capability + schema bump (not just release-
+ *   string) - two new pieces requested together:
+ *   (1) Delete Archived: a new "Delete" button on each archived-student
+ *       row (gated on a NEW capability, block/nvq_matrix:deletearchived
+ *       - editingteacher/manager only, deliberately separate from
+ *       :viewall since seeing the archived list doesn't mean being
+ *       allowed to permanently destroy it) permanently removes that
+ *       student's block_nvq_matrix data for that course: grades,
+ *       sampling, unit comments, final status, and their evidence
+ *       comments/types (resolved via the same three-table exacomp join
+ *       chain used elsewhere in this plugin, since evidence_comments has
+ *       no courseid/topicid column of its own - only mmid). New
+ *       standalone endpoint delete_archived.php independently
+ *       re-verifies the target is genuinely archived (not actively
+ *       enrolled) server-side before deleting anything, regardless of
+ *       what the request claims - this plugin has already been burned
+ *       by scoping bugs in this exact area (v26.5.3-v26.5.6) and this
+ *       action is irreversible.
+ *   (2) A student's own archived-course switcher (v26.5.5) is based
+ *       purely on exacomp/exaport evidence presence, which the delete
+ *       action above deliberately never touches (this plugin never
+ *       modifies third-party data) - so a "deleted" archived course
+ *       would otherwise keep showing on the student's own switcher
+ *       forever. New table block_nvq_matrix_cleared_archive
+ *       (studentid+courseid unique) records that a course was cleared;
+ *       written by delete_archived.php, read by view.php's student-side
+ *       archived detection to exclude it. If the student is later
+ *       actively re-enrolled, this marker has no effect on the ACTIVE-
+ *       enrolment detection path - it only ever suppresses the archived
+ *       one.
+ *   KNOWN GAP CAUGHT AND FIXED DURING THIS BUILD: initially wrote an
+ *   upgrade.php step assigning CAP_PREVENT for the new
+ *   :deletearchived capability on the companymanager role, in the SAME
+ *   version bump that introduces the capability itself - would have
+ *   silently failed, since update_capabilities() (which actually
+ *   registers a new capability into mdl_capabilities) only runs AFTER
+ *   the whole upgrade function returns, so the capability doesn't exist
+ *   in the database yet at the point that code would run. Removed;
+ *   companymanager-prevention for this specific capability is deferred
+ *   to the next version bump, mirroring this file's own established
+ *   precedent (the 2026082101 step is itself a dedicated LATER step for
+ *   capabilities introduced in earlier versions, never the same version
+ *   that introduced them).
+ *   SEPARATE BUG CAUGHT AND FIXED DURING THIS BUILD: a str_replace edit
+ *   to install.xml accidentally consumed part of the
+ *   block_nvq_matrix_evidence_types table's own opening tag while
+ *   inserting the new table ahead of it, leaving invalid XML (a
+ *   <FIELDS> block with no enclosing <TABLE> opener). Caught by
+ *   actually parsing the file with Python's xml.etree (not just brace-
+ *   counting, which can't detect XML tag-level corruption) - fixed, and
+ *   confirmed all 9 tables now parse correctly.
+ *   Also fixed in the same round (client-owned local_nvqportfolio, NOT
+ *   this plugin, delivered as a separate file since it's a different
+ *   git repo): local_nvqportfolio_can_view_student()'s :viewown check
+ *   returns false once a student is fully unenrolled (unenrolment
+ *   typically removes the role assignment it was granted through, not
+ *   just the enrolment record), so an archived student's own Assessment
+ *   Plan/Sampling Plan/Sampling Record links disappeared entirely -
+ *   fixed with a fallback presence check against that plugin's own
+ *   local_nvqport_ap/sp/sr tables, keeping the dependency direction
+ *   one-way (this plugin already calls into that one, never the other
+ *   way round).
+ *   Also fixed in matrix_data.php's get_portfolio_links(), same root
+ *   cause: is_enrolled(..., true) (active-only) gated the links, now
+ *   also allows a course with historical presence in this plugin's own
+ *   four tables - same signal as the v26.5.6 final-status-box fix.
+ *   Verified: PHP brace/paren/bracket balance on every touched file;
+ *   install.xml re-parsed with a real XML parser (Python xml.etree),
+ *   not just brace-counting, after the corruption above was caught and
+ *   fixed; confirmed $USER is available in delete_archived.php's
+ *   top-level script scope; confirmed the cleared-archive exclusion in
+ *   view.php only affects the archived-detection path, never the
+ *   active-enrolment one.
+ *
  * v26.5.6 (1.19.6) — REAL BUG FIX, reported by Lucero after testing
  *   v26.5.5 live: a student's Pass/Fail final-status box displayed fine
  *   for an active/enrolled course but disappeared entirely for an
@@ -1944,7 +2018,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082406;
+$plugin->version   = 2026082601;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -1959,4 +2033,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.19.6';
+$plugin->release   = '1.20.0';

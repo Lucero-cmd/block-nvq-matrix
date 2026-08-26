@@ -1034,6 +1034,62 @@ function nvqToggleGapMode(matrix, toggleBtn) {
             });
         }
 
+        // Archived-student "Delete" button — permanently deletes that
+        // student's NVQ matrix data for that course via
+        // delete_archived.php. Delegated (not bound per-button) since
+        // the picker's rows are raw injected HTML from view.php and this
+        // needs to keep working regardless of how initStudentPicker's
+        // own search/filter logic shows or hides rows afterward.
+        matrix.addEventListener('click', function (e) {
+            var delbtn = e.target.closest('.nvq-archived-delete-btn');
+            if (!delbtn || delbtn.disabled) {
+                return;
+            }
+            e.preventDefault();
+
+            var msg = delbtn.getAttribute('data-confirm');
+            if (msg && !window.confirm(msg)) {
+                return;
+            }
+
+            var wrap = delbtn.closest('.nvq-student-row-wrap');
+            var wasactiverow = wrap && !!wrap.querySelector('.nvq-student-row--active');
+
+            delbtn.disabled = true;
+
+            var body = new URLSearchParams();
+            body.set('studentid', delbtn.getAttribute('data-userid'));
+            body.set('courseid', delbtn.getAttribute('data-courseid'));
+            body.set('sesskey', M.cfg.sesskey);
+
+            fetch(M.cfg.wwwroot + '/blocks/nvq_matrix/delete_archived.php', {
+                method      : 'POST',
+                credentials : 'same-origin',
+                headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body        : body.toString(),
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    if (wrap) { wrap.remove(); }
+                    // The row just deleted was the one currently open in
+                    // the matrix - that data no longer exists, so reload
+                    // to fall back to the idle state cleanly rather than
+                    // leaving a now-stale view on screen.
+                    if (wasactiverow) {
+                        window.location.href = M.cfg.wwwroot + '/blocks/nvq_matrix/view.php';
+                    }
+                } else {
+                    window.alert(data.error || 'Error deleting this data.');
+                    delbtn.disabled = false;
+                }
+            })
+            .catch(function () {
+                window.alert('Error deleting this data.');
+                delbtn.disabled = false;
+            });
+        });
+
         initStudentPicker(matrix);
 
         matrix.addEventListener('click', function (e) {

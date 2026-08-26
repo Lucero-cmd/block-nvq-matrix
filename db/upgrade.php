@@ -574,5 +574,56 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         upgrade_block_savepoint(true, 2026082101, 'nvq_matrix');
     }
 
+    if ($oldversion < 2026082601) {
+
+        // FEATURE: permanently deleting an archived student's matrix
+        // data (delete_archived.php, block/nvq_matrix:deletearchived —
+        // see db/access.php) needs a way to also remove that course from
+        // the STUDENT'S OWN archived-course switcher (view.php), without
+        // touching the underlying exacomp/exaport evidence, which this
+        // plugin never modifies. The student-side archived detection is
+        // otherwise based purely on exaport evidence presence, so a
+        // lightweight marker table is the only way to suppress it
+        // without deleting someone else's plugin's data. See the table
+        // comment in install.xml for the full explanation.
+        $table = new xmldb_table('block_nvq_matrix_cleared_archive');
+
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('studentid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('timecleared', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('clearedby', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('studentid', XMLDB_KEY_FOREIGN, ['studentid'], 'user', ['id']);
+            $table->add_key('courseid', XMLDB_KEY_FOREIGN, ['courseid'], 'course', ['id']);
+            $table->add_key('clearedby', XMLDB_KEY_FOREIGN, ['clearedby'], 'user', ['id']);
+
+            $table->add_index('studentid-courseid', XMLDB_INDEX_UNIQUE, ['studentid', 'courseid']);
+
+            $dbman->create_table($table);
+        }
+
+        // NEW CAPABILITY block/nvq_matrix:deletearchived is added in
+        // db/access.php as part of this SAME version bump — deliberately
+        // NOT also assigning it CAP_PREVENT on the companymanager role
+        // here, unlike every other capability-restriction step in this
+        // file. update_capabilities() (which actually registers a new
+        // capability into mdl_capabilities and applies archetype
+        // defaults) only runs AFTER this whole upgrade function returns,
+        // for this exact upgrade pass — so a capability introduced in
+        // THIS version bump does not exist in the database yet at the
+        // point this code runs, and assign_capability() against it here
+        // would silently fail. The companymanager-prevent step for
+        // :deletearchived is deferred to the next version bump, mirroring
+        // this file's own established precedent: 2026082101 above is
+        // itself a dedicated LATER step for capabilities introduced in
+        // earlier versions, never the same version that introduced them.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026082601, 'nvq_matrix');
+    }
+
     return true;
 }
