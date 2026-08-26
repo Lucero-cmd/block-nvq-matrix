@@ -242,14 +242,52 @@ class matrix_data {
         // variants) would otherwise surface a final-status box for every
         // course that unit is linked to — including ones the student was
         // never actually registered/enrolled on. Scope it down to courses
-        // the student is genuinely enrolled in before it's used to build
+        // the student has a genuine presence on before it's used to build
         // the final-status boxes below.
+        //
+        // REAL BUG FIXED HERE: this used to check ACTIVE enrollment only,
+        // so the moment a student was archived (unenrolled) from a
+        // course, their Pass/Fail status box for it silently disappeared
+        // entirely — reported as "pass status in archive does not
+        // display but displays when enrolled". An archived student's
+        // status row is untouched by unenrollment (confirmed, v26.4.13)
+        // exactly like their grade/sampling/comment rows are, so this now
+        // also keeps a course if the student has genuine historical
+        // presence there — the same four-table signal already trusted
+        // for the archived-students feature itself (view.php) — not just
+        // current enrollment. This still excludes a course the student
+        // was truly never on (the original protective purpose), since
+        // presence requires an actual row in one of these tables, not
+        // just the unit happening to be linked to that course too.
         if (!empty($courseidnamemap)) {
-            $enrolledcourseids = array_keys(enrol_get_users_courses($studentid, true, ['id']));
-            $courseidnamemap = array_intersect_key(
-                $courseidnamemap,
-                array_flip($enrolledcourseids)
+            $candidatecourseids = array_keys($courseidnamemap);
+            $keepcourseids = array_flip(array_keys(enrol_get_users_courses($studentid, true, ['id'])));
+
+            list($fscidsql1, $fscparams1) = $DB->get_in_or_equal($candidatecourseids, SQL_PARAMS_NAMED, 'fscg');
+            list($fscidsql2, $fscparams2) = $DB->get_in_or_equal($candidatecourseids, SQL_PARAMS_NAMED, 'fscs');
+            list($fscidsql3, $fscparams3) = $DB->get_in_or_equal($candidatecourseids, SQL_PARAMS_NAMED, 'fscc');
+            list($fscidsql4, $fscparams4) = $DB->get_in_or_equal($candidatecourseids, SQL_PARAMS_NAMED, 'fscf');
+            $presencecourseids = $DB->get_fieldset_sql("
+                SELECT DISTINCT courseid FROM (
+                    SELECT courseid FROM {block_nvq_matrix_grades} WHERE studentid = :fscsid1 AND courseid $fscidsql1
+                    UNION
+                    SELECT courseid FROM {block_nvq_matrix_sampling} WHERE studentid = :fscsid2 AND courseid $fscidsql2
+                    UNION
+                    SELECT courseid FROM {block_nvq_matrix_unit_comments} WHERE studentid = :fscsid3 AND courseid $fscidsql3
+                    UNION
+                    SELECT courseid FROM {block_nvq_matrix_status} WHERE studentid = :fscsid4 AND courseid $fscidsql4
+                ) presence
+            ",
+                $fscparams1 + ['fscsid1' => $studentid]
+                + $fscparams2 + ['fscsid2' => $studentid]
+                + $fscparams3 + ['fscsid3' => $studentid]
+                + $fscparams4 + ['fscsid4' => $studentid]
             );
+            foreach ($presencecourseids as $pcid) {
+                $keepcourseids[(int) $pcid] = true;
+            }
+
+            $courseidnamemap = array_intersect_key($courseidnamemap, $keepcourseids);
         }
 
         // ----------------------------------------------------------------

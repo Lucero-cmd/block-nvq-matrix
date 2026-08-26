@@ -17,6 +17,40 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.5.6 (1.19.6) — REAL BUG FIX, reported by Lucero after testing
+ *   v26.5.5 live: a student's Pass/Fail final-status box displayed fine
+ *   for an active/enrolled course but disappeared entirely for an
+ *   archived one. Genuinely pre-existing (not introduced by v26.5.0-
+ *   v26.5.5), only now exposed because the archived-students feature
+ *   only recently started actually getting exercised this directly.
+ *   Root cause: matrix_data::build()'s final-status-box course list was
+ *   scoped with an ACTIVE-enrollment-only filter (added originally to
+ *   stop a status box appearing for a course a unit merely happens to
+ *   be linked to, that the student was never really on at all) - so the
+ *   moment a student is archived (unenrolled) from a course, this
+ *   filter silently emptied their status box for it too, even though
+ *   their actual block_nvq_matrix_status row is completely untouched by
+ *   unenrollment (confirmed, v26.4.13) exactly like grade/sampling/
+ *   comment rows are.
+ *   Fixed by keeping the original protective intent but widening what
+ *   counts as "genuinely this student's course": now kept if EITHER
+ *   actively enrolled OR the student has real historical presence there
+ *   (a row in block_nvq_matrix_grades/sampling/unit_comments/status) -
+ *   the exact same four-table signal already trusted for the archived-
+ *   students feature itself (view.php). A course the student was truly
+ *   never on (the original bug this filter existed to prevent) still
+ *   correctly has no box, since presence requires an actual row, not
+ *   just the unit happening to be linked to that course too.
+ *   No schema/capability change - release-string/version bump only.
+ *   Verified: PHP brace/paren/bracket balance; confirmed all four table
+ *   names/columns match the exact shape already used successfully
+ *   elsewhere in this file and in view.php's own archived-detection
+ *   query; confirmed each of the four get_in_or_equal() calls uses its
+ *   own distinct placeholder prefix (fscg/fscs/fscc/fscf) and each
+ *   studentid parameter its own distinct name (fscsid1-4), per this
+ *   plugin's own established v26.4.16 rule about never reusing one
+ *   get_in_or_equal() result's placeholders within a single query.
+ *
  * v26.5.5 (1.19.5) — REAL BUG FIX, reported by Lucero after testing
  *   v26.5.3's course-scoping fix live: a student's OTHER course had
  *   stopped appearing on their own matrix page at all. Root cause: the
@@ -1910,7 +1944,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082405;
+$plugin->version   = 2026082406;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -1925,4 +1959,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.19.5';
+$plugin->release   = '1.19.6';
