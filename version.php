@@ -17,6 +17,24 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.2 (1.20.2) — Delete Archived still failing after v26.6.1's
+ *   rollback-logic fix and confirmed DB upgrade - the wrapper-hiding
+ *   fix DID work (button correctly hidden until "Show Archived" is
+ *   ticked, per Lucero), but the deletion itself still errors with no
+ *   visible cause. Rather than guess a third time, the real exception
+ *   message is now surfaced directly: added to the JSON response as
+ *   'debugmessage' (safe here - this endpoint is only ever reachable
+ *   past the block/nvq_matrix:deletearchived capability check, so
+ *   there's no meaningful disclosure risk in showing a privileged user
+ *   the real cause instead of sending them back to guess from a generic
+ *   message again), and shown in the browser alert() alongside the
+ *   normal error text. No functional change to the delete logic itself
+ *   - this version exists purely to get a real, actionable error
+ *   message on the next test instead of another blind guess.
+ *   No schema/capability change - release-string/version bump only.
+ *   Verified: PHP brace/paren/bracket balance, extracted <script> block
+ *   re-validated with node --check.
+ *
  * v26.6.1 (1.20.1) — REAL BUG FIXES, reported by Lucero after testing
  *   v26.6.0's Delete Archived feature live:
  *   (1) Delete always returned "Error deleting this data" (generic
@@ -2062,7 +2080,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082602;
+$plugin->version   = 2026082603;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2077,4 +2095,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.1';
+$plugin->release   = '1.20.2';

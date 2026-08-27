@@ -1089,7 +1089,11 @@ function nvqToggleGapMode(matrix, toggleBtn) {
                         window.location.href = M.cfg.wwwroot + '/blocks/nvq_matrix/view.php';
                     }
                 } else {
-                    window.alert(data.error || 'Error deleting this data.');
+                    var errmsg = data.error || 'Error deleting this data.';
+                    if (data.debugmessage) {
+                        errmsg += '\n\n(debug: ' + data.debugmessage + ')';
+                    }
+                    window.alert(errmsg);
                     delbtn.disabled = false;
                 }
             })
