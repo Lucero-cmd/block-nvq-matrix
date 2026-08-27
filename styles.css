@@ -266,6 +266,7 @@
    attribute (correctly) says underneath. */
 .nvq-student-list[hidden],
 .nvq-student-row[hidden],
+.nvq-student-row-wrap[hidden],
 .nvq-student-filters[hidden],
 .nvq-completed-daterange[hidden],
 .nvq-evidencetype-popover[hidden] {

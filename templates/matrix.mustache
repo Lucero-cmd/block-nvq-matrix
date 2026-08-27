@@ -876,7 +876,16 @@ function nvqToggleGapMode(matrix, toggleBtn) {
                 var matchessearch = !query || (row.dataset.name || '').indexOf(query) !== -1;
                 var visible = matchesstatus && matchesdate && matchessearch;
 
-                row.hidden = !visible;
+                // Archived rows the current viewer can delete are wrapped
+                // in an extra .nvq-student-row-wrap alongside their
+                // Delete button (see view.php) - hiding just the <a>
+                // itself left the button, a SIBLING inside that wrapper,
+                // still visible regardless of the toggle above it. Hide
+                // the whole wrapper when present; a plain row (the
+                // common case) has no wrapper, so this falls back to
+                // hiding the row directly exactly as before.
+                var hidetarget = row.closest('.nvq-student-row-wrap') || row;
+                hidetarget.hidden = !visible;
                 if (visible) { visiblecount += 1; }
             });
 

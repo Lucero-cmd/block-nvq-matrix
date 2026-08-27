@@ -17,6 +17,50 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.1 (1.20.1) — REAL BUG FIXES, reported by Lucero after testing
+ *   v26.6.0's Delete Archived feature live:
+ *   (1) Delete always returned "Error deleting this data" (generic
+ *       catch-all). Most likely cause: the delete DB transaction reads
+ *       the NEW block_nvq_matrix_cleared_archive table (v26.6.0), which
+ *       only actually exists after the real Moodle DB upgrade runs
+ *       (Site administration -> Notifications), not just from pulling
+ *       the git files - a real schema change needs that step, unlike
+ *       most of this branch's earlier release-string-only bumps.
+ *       Separately, also found and fixed a REAL bug in the error
+ *       handling itself while investigating: the catch block checked
+ *       $transaction->is_disposed() before rolling back - not an actual
+ *       moodle_transaction method - risking a second, undefined-method
+ *       error masking whatever the original failure was. Simplified to
+ *       the standard rollback() call, and added debugging() logging of
+ *       the real exception message server-side (visible in Moodle's
+ *       error log / on-screen if debugging is enabled) instead of only
+ *       ever showing the same generic string - needed to actually
+ *       diagnose a failure like this rather than guessing blind.
+ *   (2) The Delete button was visible on archived rows even while the
+ *       "Show Archived" toggle was OFF. Root cause: the picker's
+ *       show/hide filter (initStudentPicker() in matrix.mustache) sets
+ *       `hidden` on the row's <a> element directly - but v26.6.0 wraps
+ *       an archived-with-permission row's <a> together with its Delete
+ *       button in a new .nvq-student-row-wrap div, so the button (a
+ *       SIBLING inside that wrapper) was never actually covered by
+ *       hiding just the <a> next to it. Fixed by hiding the wrapper
+ *       (row.closest('.nvq-student-row-wrap') || row) instead of
+ *       always the row itself.
+ *       While fixing this, proactively also added
+ *       .nvq-student-row-wrap[hidden] to this file's own existing
+ *       [hidden]-override list (see the "BUG FIX" comment block near
+ *       .nvq-student-list[hidden] etc.) - this new wrapper sets
+ *       `display: flex` via a plain class selector, which is exactly
+ *       the documented failure mode already caught twice before in
+ *       this same file (v26.5.0's gap-mode fix, and the original
+ *       student-list fix this pattern is named after) - fixed
+ *       preemptively here rather than waiting to hit it live a third
+ *       time.
+ *   No schema/capability change - release-string/version bump only.
+ *   Verified: PHP brace/paren/bracket balance, and the extracted
+ *   <script> block re-validated with node --check (real JS syntax
+ *   parsing, not brace-counting) after the filter-logic edit.
+ *
  * v26.6.0 (1.20.0) — REAL capability + schema bump (not just release-
  *   string) - two new pieces requested together:
  *   (1) Delete Archived: a new "Delete" button on each archived-student
@@ -2018,7 +2062,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082601;
+$plugin->version   = 2026082602;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2033,4 +2077,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.0';
+$plugin->release   = '1.20.1';
