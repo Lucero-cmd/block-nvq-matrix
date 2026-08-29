@@ -17,6 +17,117 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.3 (1.20.3) — Full plugin audit (permissions/grading, delete
+ *   archived, upgrade path, assign-assessor, notifications, styles,
+ *   privacy, backup/restore, group-scoping) requested by Lucero after
+ *   the grading permission error on a shared-unit course couldn't be
+ *   traced by hand any further. Seven real, independently-confirmed
+ *   findings fixed or documented here:
+ *
+ *   (1) delete_archived.php — the actual root cause of "Delete
+ *       Archived still failing" going back to v26.6.1: the catch
+ *       block called $transaction->rollback($e), which by Moodle's own
+ *       design re-throws $e immediately as part of
+ *       force_transaction_rollback(). Every line after it in that
+ *       catch block - debugging(), $response['error'],
+ *       $response['debugmessage'] added in v26.6.2 specifically to
+ *       diagnose this - was therefore dead code, unreachable. The
+ *       re-thrown exception propagated uncaught, so the browser got
+ *       Moodle's default HTML error page instead of this endpoint's
+ *       JSON, which is exactly why the v26.6.2 diagnostic could never
+ *       surface anything. Fixed by building the full response first,
+ *       then rolling back inside its own nested try/catch so its
+ *       re-throw can't swallow the response already built.
+ *
+ *   (2) matrix_data.php build() — grade/sample/comment buttons for a
+ *       unit shared across more than one course silently submitted the
+ *       WRONG course id. $topiccourseidmap (built for an unrelated
+ *       final-status dedup purpose, see its own declaration comment)
+ *       deliberately resolves to the LOWEST course id a topic is
+ *       linked to, but that same value was reused as the grading
+ *       action's course context - so a teacher with a role in the
+ *       course actually being viewed, grading a shared unit, had their
+ *       capability checked against a DIFFERENT course entirely, most
+ *       often one they hold no role in. Root cause of the "no
+ *       permission to grade this student" error reported live during
+ *       this audit (course 12, topic 65, shared with course 10). Fixed
+ *       by using the actual $courseid parameter directly whenever
+ *       $oncoursepage is true; $topiccourseidmap is now only used for
+ *       its original unscoped/all-courses purpose.
+ *
+ *   (3) matrix_data.php notify_assessor_of_submission() — the deep
+ *       link sent to an assessor when a student submits evidence only
+ *       included nvq_matrix_student, not nvq_matrix_course. view.php
+ *       explicitly treats a bare student param with no matching course
+ *       param as unresolved and falls back to the idle "no student
+ *       selected" screen (the same enforcement that closed the
+ *       combined-view leak in v26.4.24-26) - so every submission
+ *       notification was landing assessors on an empty picker instead
+ *       of deep-linking to the student's matrix. Both params are now
+ *       included.
+ *
+ *   (4) classes/privacy/provider.php — block_nvq_matrix_assessor
+ *       (userid, setby) and block_nvq_matrix_cleared_archive
+ *       (studentid, clearedby) both store direct user references but
+ *       were completely absent from this provider; a GDPR export or
+ *       right-to-be-forgotten request would have silently missed them.
+ *       Added to get_metadata(), get_contexts_for_userid(),
+ *       get_users_in_context(), export_user_data() (exported
+ *       alongside their author, not subject-deleted - neither table
+ *       holds free-text content "about" a person the way grades/
+ *       comments do, they're purely administrative/audit records,
+ *       same treatment this provider already gives every other
+ *       author-attribution column), and
+ *       delete_data_for_all_users_in_context() (full course deletion
+ *       still removes both tables' rows for that course, as before -
+ *       only the personal subject-erasure methods leave them in place).
+ *
+ *   (5) delete_archived.php — a group-restricted Company Manager's
+ *       visibility into the archived list was enforced ENTIRELY by
+ *       view.php's display logic (the "actual leak this fix exists
+ *       for" comments from v26.4.24-26). This AJAX endpoint never
+ *       independently re-verified group membership server-side, even
+ *       though its own docblock states the opposite philosophy
+ *       ("never trust a client-supplied studentid/courseid pair
+ *       without re-checking server-side") for the archived-status
+ *       check right next to it. A Company Manager holding
+ *       :deletearchived could submit ANY studentid/courseid pair
+ *       directly, bypassing the UI, and delete another company's
+ *       archived data. Out of the box this was latent rather than
+ *       live - :deletearchived's archetype list only grants
+ *       editingteacher/manager, not teacher (Company Manager's
+ *       archetype) - but it's exactly the scenario the deferred
+ *       upgrade step from v26.6.0 was meant to close. Fixed two ways:
+ *       a defensive group-membership re-check added directly to this
+ *       endpoint (belt-and-braces, matches the endpoint's own stated
+ *       philosophy), plus the deferred Company Manager Prevent
+ *       override for :deletearchived finally added below.
+ *
+ *   (6) Backup/restore — DOCUMENTED, not code-fixed (see
+ *       block_nvq_matrix.php's class docblock for the full
+ *       explanation): applicable_formats() only allows 'my' (the
+ *       Dashboard), so this block can never actually be added to a
+ *       course. Moodle's course backup only serializes block instances
+ *       present in that course's own context, so a standard
+ *       backup_block_task/restore_block_task implementation would
+ *       never actually be invoked - it would be dead code, not a real
+ *       fix. This plugin's data (grades, sampling, comments, status,
+ *       assessor assignments) does NOT survive a course backup/
+ *       restore, silently and without warning. Client decision:
+ *       document this clearly rather than change the block's
+ *       architecture or build a separate export/import tool.
+ *
+ *   (7) Two capability description strings were missing from the lang
+ *       file entirely - block/nvq_matrix:finalstatus and
+ *       block/nvq_matrix:manageassessor - both introduced in v26.6.0
+ *       but never given a matching lang string, causing a
+ *       "Invalid get_string() identifier" debugging warning on every
+ *       role-definition/check-permissions page load. Added.
+ *
+ *   REAL $plugin->version bump (new capability-prevent upgrade step for
+ *   :deletearchived) - not a release-string-only release like most
+ *   entries in this file.
+ *
  * v26.6.2 (1.20.2) — Delete Archived still failing after v26.6.1's
  *   rollback-logic fix and confirmed DB upgrade - the wrapper-hiding
  *   fix DID work (button correctly hidden until "Show Archived" is
@@ -2080,7 +2191,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082603;
+$plugin->version   = 2026082701;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2095,4 +2206,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.2';
+$plugin->release   = '1.20.3';

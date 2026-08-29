@@ -625,5 +625,32 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         upgrade_block_savepoint(true, 2026082601, 'nvq_matrix');
     }
 
+    if ($oldversion < 2026082701) {
+        // Finishes the deferred step flagged above (2026082601's own
+        // comment) - :deletearchived exists in the database now, so it
+        // can finally be Prevented for Company Manager here, closing the
+        // gap that made delete_archived.php's own new group-membership
+        // re-check (v26.6.3, see that file) necessary in the first
+        // place: without this, a site that ever granted Company Manager
+        // :deletearchived directly (outside its default archetype grant)
+        // would let them submit any studentid/courseid pair to that
+        // endpoint, not just their own group's. Same lookup-by-shortname
+        // and context_system pattern as 2026082101 above.
+        $companymanagerrole = $DB->get_record('role', ['shortname' => 'companymanager']);
+        if ($companymanagerrole) {
+            $systemcontext = context_system::instance();
+            assign_capability(
+                'block/nvq_matrix:deletearchived',
+                CAP_PREVENT,
+                $companymanagerrole->id,
+                $systemcontext->id,
+                true
+            );
+        }
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026082701, 'nvq_matrix');
+    }
+
     return true;
 }

@@ -22,6 +22,27 @@
  * classes/matrix_data.php — this block simply provides a
  * "View Matrix" button that opens the full-page view.
  *
+ * IMPORTANT - DATA DOES NOT SURVIVE COURSE BACKUP/RESTORE (documented,
+ * not fixed, v26.6.3 audit): applicable_formats() below deliberately
+ * only allows 'my' (the Dashboard) - this block can never be added to
+ * a course. Moodle's course backup only serializes block instances
+ * that are actually present in that course's own context, so a course
+ * backup/restore (term rollover, course duplication, disaster
+ * recovery) will NEVER include this plugin's data - grades, sampling
+ * records, unit/IQA comments, final status, or assessor assignments -
+ * no matter how thorough the backup otherwise is. This is invisible:
+ * the backup/restore completes normally with no warning, and the
+ * missing data is only discovered later when someone goes looking for
+ * it. There is currently no code-level fix for this - see the
+ * project handover doc for the options considered and why "document
+ * only" was chosen over changing applicable_formats() to allow
+ * course-view (which would require adding the block to every course
+ * individually) or building a separate standalone export/import tool.
+ * Any admin process that backs up and restores a course containing
+ * NVQ matrix data needs a manual, separate export step first (the
+ * existing portfolio export feature, classes/portfolio_export.php,
+ * covers a single student at a time — not a bulk per-course export).
+ *
  * @package   block_nvq_matrix
  * @copyright 2025 Alex D&D Training Ltd
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

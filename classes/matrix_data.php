@@ -685,7 +685,24 @@ class matrix_data {
                 ] + self::build_unit_grade_row(
                     $topic->id,
                     $studentid,
-                    $topiccourseidmap[$topic->id] ?? 0,
+                    // Real bug fixed here (v26.6.3): $topiccourseidmap
+                    // deliberately resolves to the LOWEST courseid a
+                    // topic is linked to (see its declaration above) -
+                    // correct for the final-status dedup it was built
+                    // for, but wrong here. When a unit is shared across
+                    // more than one course, using that map meant every
+                    // grade/sample/comment button silently submitted the
+                    // WRONG course's id whenever it differed from the
+                    // one actually being viewed - the viewing teacher's
+                    // capabilities were then checked against a course
+                    // they may have no role in at all, surfacing as a
+                    // baffling "no permission to grade" error scoped to
+                    // shared units only. When on a specific course page,
+                    // use that course's own id directly instead - it's
+                    // already known and correct; only fall back to the
+                    // map for the unscoped/all-courses view where no
+                    // single $courseid exists.
+                    $oncoursepage ? $courseid : ($topiccourseidmap[$topic->id] ?? 0),
                     $grademap,
                     $cangrade,
                     $gradeurl,
@@ -694,14 +711,14 @@ class matrix_data {
                 ) + self::build_unit_sampling_row(
                     $topic->id,
                     $studentid,
-                    $topiccourseidmap[$topic->id] ?? 0,
+                    $oncoursepage ? $courseid : ($topiccourseidmap[$topic->id] ?? 0),
                     $samplemap,
                     $cansample,
                     $sampleurl
                 ) + self::build_unit_comment_row(
                     $topic->id,
                     $studentid,
-                    $topiccourseidmap[$topic->id] ?? 0,
+                    $oncoursepage ? $courseid : ($topiccourseidmap[$topic->id] ?? 0),
                     $unitcommentmap,
                     $commenternames,
                     $caniqacomment,
@@ -1237,7 +1254,17 @@ class matrix_data {
             'course'  => $coursename,
         ]);
 
-        $contexturl = new \moodle_url('/blocks/nvq_matrix/view.php', ['nvq_matrix_student' => $studentid]);
+        // Real bug fixed here (v26.6.3): view.php explicitly treats a
+        // bare nvq_matrix_student param with no matching
+        // nvq_matrix_course as unresolved and falls back to the idle
+        // "no student selected" state (see its own comments on the
+        // combined-view leak this enforces) - so this link was landing
+        // assessors on an empty picker screen instead of deep-linking to
+        // the student's matrix. Both params are required together.
+        $contexturl = new \moodle_url('/blocks/nvq_matrix/view.php', [
+            'nvq_matrix_student' => $studentid,
+            'nvq_matrix_course'  => $courseid,
+        ]);
 
         $message = new \core\message\message();
         $message->component       = 'block_nvq_matrix';

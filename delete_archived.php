@@ -84,6 +84,42 @@ if (is_enrolled($coursecontext, $studentid, '', true)) {
 
 global $DB, $USER;
 
+// Check 3 — real bug fixed here (v26.6.3): a group-restricted Company
+// Manager's visibility into the archived list is enforced entirely by
+// view.php's display logic (see its own extensive comments on this
+// exact leak, v26.4.24-26). This endpoint never re-verified that
+// server-side - a Company Manager holding :deletearchived could submit
+// ANY studentid/courseid pair directly, bypassing the UI entirely, and
+// delete another company's archived data they were never shown.
+// Fail-closed, matching this plugin's already-established "no group =
+// sees nobody" rule for company managers: only applies when the caller
+// actually holds the companymanager role on this course, so a full
+// teacher/manager/admin's ability to delete is completely unaffected.
+$callerroles = get_user_roles($coursecontext, $USER->id, true);
+$callerroleshortnames = array_map(function ($r) {
+    return $r->shortname;
+}, $callerroles);
+if (in_array('companymanager', $callerroleshortnames, true)) {
+    $callergroups = groups_get_user_groups($courseid, $USER->id);
+    $callergroupids = $callergroups[0] ?? [];
+    $targetsharesgroup = false;
+    if (!empty($callergroupids)) {
+        list($ginsql, $ginparams) = $DB->get_in_or_equal($callergroupids, SQL_PARAMS_NAMED, 'delgrp');
+        $ginparams['targetuser'] = $studentid;
+        $targetsharesgroup = $DB->record_exists_select(
+            'groups_members',
+            "userid = :targetuser AND groupid $ginsql",
+            $ginparams
+        );
+    }
+    if (!$targetsharesgroup) {
+        http_response_code(403);
+        $response['error'] = get_string('deletearchivednopermission', 'block_nvq_matrix');
+        echo json_encode($response);
+        die();
+    }
+}
+
 try {
     $transaction = $DB->start_delegated_transaction();
 
@@ -161,18 +197,21 @@ try {
     $response['success'] = true;
     $response['message'] = get_string('deletearchivedsuccess', 'block_nvq_matrix');
 } catch (\Throwable $e) {
-    // Real bug fixed here: this used to check
-    // $transaction->is_disposed() before rolling back - not an actual
-    // moodle_transaction method, so calling it risked a second,
-    // undefined-method error masking the original one. rollback() alone
-    // is the standard, safe call here.
-    if (!empty($transaction)) {
-        $transaction->rollback($e);
-    }
-    // Logged server-side (visible in Moodle's error log / on-screen if
-    // debugging is enabled) rather than exposed to the JSON response -
-    // needed to actually diagnose a failure like this one instead of
-    // guessing blind from a generic message alone.
+    // Real bug fixed here (v26.6.3): moodle_transaction::rollback($e)
+    // does not just roll back and return - by Moodle's own design it
+    // re-throws the exception it's given, immediately, as part of
+    // force_transaction_rollback(). Every line that used to sit after
+    // it in this catch block (debugging(), $response['error'],
+    // $response['debugmessage']) was therefore dead code - it never
+    // ran, because rollback() had already re-thrown before reaching it.
+    // The re-thrown exception then propagated all the way up uncaught,
+    // so the browser got Moodle's default HTML error page instead of
+    // this endpoint's JSON - which is exactly why every diagnostic
+    // added here in v26.6.1/v26.6.2 could never actually surface.
+    //
+    // Fix: build the full JSON response FIRST, then roll back inside
+    // its own nested try/catch so its re-throw can't swallow the
+    // response we already built.
     debugging('block_nvq_matrix delete_archived.php failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
     $response['error'] = get_string('deletearchivederror', 'block_nvq_matrix');
     // Included directly in the JSON too, not just the log - this
@@ -181,6 +220,18 @@ try {
     // in showing them the real cause instead of sending them back to
     // guess from a generic message a second time.
     $response['debugmessage'] = $e->getMessage();
+
+    if (!empty($transaction)) {
+        try {
+            $transaction->rollback($e);
+        } catch (\Throwable $ignored) {
+            // Expected - rollback() re-throws $e by design. The actual
+            // rollback has already happened by this point; the response
+            // above is already built, so there's nothing left to do
+            // with the re-thrown exception here.
+            unset($ignored);
+        }
+    }
 }
 
 echo json_encode($response);

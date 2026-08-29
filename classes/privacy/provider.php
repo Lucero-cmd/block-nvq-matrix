@@ -18,13 +18,22 @@
  * Privacy API implementation for block_nvq_matrix.
  *
  * Replaces the null_provider that was in place since v17 (and was wrong from
- * that point on — see version.php v25 changelog). This block stores, in its
- * own five dedicated tables, unit-level grades, sampling status, three kinds
- * of attributed comments, and a final Pass/Fail status per student per
- * course, all tied to a specific student and to the staff member who wrote
- * each entry. All five tables are scoped to CONTEXT_COURSE (four via a
- * direct courseid column, one — evidence comments — via a join chain
- * through exacomp's own tables, since it has no courseid column of its own).
+ * that point on — see version.php v25 changelog). This block stores, across
+ * its own dedicated tables, unit-level grades, sampling status, three kinds
+ * of attributed comments, a final Pass/Fail status per student per course,
+ * the designated assessor per student per course, and a record of when an
+ * archived student's data was permanently deleted - all tied to a specific
+ * student and/or to the staff member who wrote or actioned each entry. Every
+ * table is scoped to CONTEXT_COURSE (most via a direct courseid column, one —
+ * evidence comments — via a join chain through exacomp's own tables, since
+ * it has no courseid column of its own).
+ *
+ * block_nvq_matrix_assessor and block_nvq_matrix_cleared_archive were added
+ * to this provider in v26.6.3 - a real gap, not a deliberate exclusion; both
+ * store direct user references and were previously missing entirely (see
+ * their own get_metadata() entries below for why each is treated as
+ * export-only rather than subject-erasable, same reasoning as this file's
+ * existing author-attribution columns).
  *
  * Design decision on deletion — read before changing:
  * A row in these tables has two people attached to it: the STUDENT it is
@@ -143,6 +152,33 @@ class provider implements
             'privacy:metadata:block_nvq_matrix_status'
         );
 
+        // Real gap fixed here (v26.6.3): these two tables store direct
+        // user references (assessor.userid/setby,
+        // cleared_archive.studentid/clearedby) but were missing from
+        // this provider entirely - a data export or right-to-be-
+        // forgotten request would have silently missed them.
+        $collection->add_database_table(
+            'block_nvq_matrix_assessor',
+            [
+                'courseid'     => 'privacy:metadata:block_nvq_matrix_assessor:courseid',
+                'userid'       => 'privacy:metadata:block_nvq_matrix_assessor:userid',
+                'setby'        => 'privacy:metadata:block_nvq_matrix_assessor:setby',
+                'timemodified' => 'privacy:metadata:block_nvq_matrix_assessor:timemodified',
+            ],
+            'privacy:metadata:block_nvq_matrix_assessor'
+        );
+
+        $collection->add_database_table(
+            'block_nvq_matrix_cleared_archive',
+            [
+                'studentid'   => 'privacy:metadata:block_nvq_matrix_cleared_archive:studentid',
+                'courseid'    => 'privacy:metadata:block_nvq_matrix_cleared_archive:courseid',
+                'timecleared' => 'privacy:metadata:block_nvq_matrix_cleared_archive:timecleared',
+                'clearedby'   => 'privacy:metadata:block_nvq_matrix_cleared_archive:clearedby',
+            ],
+            'privacy:metadata:block_nvq_matrix_cleared_archive'
+        );
+
         $collection->add_subsystem_link(
             'core_message',
             [],
@@ -247,6 +283,31 @@ class provider implements
             'userid13'      => $userid,
         ]);
 
+        // Real gap fixed here (v26.6.3) - see get_metadata() above.
+        $contextlist->add_from_sql("
+            SELECT ctx.id
+              FROM {context} ctx
+              JOIN {block_nvq_matrix_assessor} a ON a.courseid = ctx.instanceid
+             WHERE ctx.contextlevel = :contextlevel6
+               AND (a.userid = :userid14 OR a.setby = :userid15)
+        ", [
+            'contextlevel6' => CONTEXT_COURSE,
+            'userid14'      => $userid,
+            'userid15'      => $userid,
+        ]);
+
+        $contextlist->add_from_sql("
+            SELECT ctx.id
+              FROM {context} ctx
+              JOIN {block_nvq_matrix_cleared_archive} ca ON ca.courseid = ctx.instanceid
+             WHERE ctx.contextlevel = :contextlevel7
+               AND (ca.studentid = :userid16 OR ca.clearedby = :userid17)
+        ", [
+            'contextlevel7' => CONTEXT_COURSE,
+            'userid16'      => $userid,
+            'userid17'      => $userid,
+        ]);
+
         return $contextlist;
     }
 
@@ -321,6 +382,23 @@ class provider implements
         $userlist->add_from_sql('notifiedby', "
             SELECT notifiedby FROM {block_nvq_matrix_status}
              WHERE courseid = :courseid AND notifiedby IS NOT NULL
+        ", ['courseid' => $courseid]);
+
+        // Real gap fixed here (v26.6.3) - see get_metadata() above.
+        $userlist->add_from_sql('userid', "
+            SELECT userid FROM {block_nvq_matrix_assessor} WHERE courseid = :courseid
+        ", ['courseid' => $courseid]);
+        $userlist->add_from_sql('setby', "
+            SELECT setby FROM {block_nvq_matrix_assessor}
+             WHERE courseid = :courseid AND setby IS NOT NULL
+        ", ['courseid' => $courseid]);
+
+        $userlist->add_from_sql('studentid', "
+            SELECT studentid FROM {block_nvq_matrix_cleared_archive} WHERE courseid = :courseid
+        ", ['courseid' => $courseid]);
+        $userlist->add_from_sql('clearedby', "
+            SELECT clearedby FROM {block_nvq_matrix_cleared_archive}
+             WHERE courseid = :courseid AND clearedby IS NOT NULL
         ", ['courseid' => $courseid]);
     }
 
@@ -483,6 +561,67 @@ class provider implements
                 ['u1' => $userid, 'u2' => $userid, 'courseid' => $courseid]
             );
 
+            // Real gap fixed here (v26.6.3) - see get_metadata() above.
+            // A user's OWN assessor-assignment record (they are the
+            // designated assessor) is exported here as "authored" data
+            // rather than under "own data" above - unlike a student's
+            // grade/sampling/status rows, being assigned as an assessor
+            // isn't personal information ABOUT them in the same sense;
+            // it's a course-administration fact they're one of two
+            // parties to (alongside setby, who assigned them), so both
+            // sides are shown together in this section.
+            $authoredassessor = $DB->get_records_select(
+                'block_nvq_matrix_assessor',
+                '(userid = :u1 OR setby = :u2) AND courseid = :courseid',
+                ['u1' => $userid, 'u2' => $userid, 'courseid' => $courseid]
+            );
+            $authoredclearedarchive = $DB->get_records_select(
+                'block_nvq_matrix_cleared_archive',
+                'clearedby = :u1 AND courseid = :courseid',
+                ['u1' => $userid, 'courseid' => $courseid]
+            );
+
+            if (!empty($authoredassessor)) {
+                $data = (object) ['assessorassignments' => array_values(array_map(function ($a) use ($userid) {
+                    return (object) [
+                        'role'         => ($a->userid == $userid)
+                            ? get_string('privacy:assessorrole:assignee', 'block_nvq_matrix')
+                            : get_string('privacy:assessorrole:assignedby', 'block_nvq_matrix'),
+                        'userid'       => $a->userid,
+                        'setby'        => $a->setby,
+                        'timemodified' => $a->timemodified ? transform::datetime($a->timemodified) : null,
+                    ];
+                }, $authoredassessor))];
+                writer::with_context($context)->export_data(
+                    array_merge($subcontext, [get_string('privacy:authoredentries', 'block_nvq_matrix')]),
+                    $data
+                );
+            }
+
+            // A student's own cleared-archive rows (they are the
+            // studentid) are intentionally NOT shown under "own data"
+            // above - this table only ever holds bookkeeping about a
+            // long-past teacher action, not something the student
+            // experiences directly, so it's exported here alongside its
+            // author for context rather than duplicated in both places.
+            $ownclearedarchive = $DB->get_records('block_nvq_matrix_cleared_archive', [
+                'studentid' => $userid, 'courseid' => $courseid,
+            ]);
+            $clearedarchivetoexport = $authoredclearedarchive + $ownclearedarchive;
+            if (!empty($clearedarchivetoexport)) {
+                $data = (object) ['archiveclearances' => array_values(array_map(function ($ca) {
+                    return (object) [
+                        'studentid'   => $ca->studentid,
+                        'clearedby'   => $ca->clearedby,
+                        'timecleared' => $ca->timecleared ? transform::datetime($ca->timecleared) : null,
+                    ];
+                }, $clearedarchivetoexport))];
+                writer::with_context($context)->export_data(
+                    array_merge($subcontext, [get_string('deletearchived', 'block_nvq_matrix')]),
+                    $data
+                );
+            }
+
             if (!empty($authoredgrades) || !empty($authoredsampling) || !empty($authoredunitcomments) || !empty($authoredstatus)) {
                 $data = (object) [
                     'grades'   => array_values(array_map(function ($g) {
@@ -572,6 +711,9 @@ class provider implements
         $DB->delete_records('block_nvq_matrix_sampling', ['courseid' => $courseid]);
         $DB->delete_records('block_nvq_matrix_unit_comments', ['courseid' => $courseid]);
         $DB->delete_records('block_nvq_matrix_status', ['courseid' => $courseid]);
+        // Real gap fixed here (v26.6.3) - see get_metadata() above.
+        $DB->delete_records('block_nvq_matrix_assessor', ['courseid' => $courseid]);
+        $DB->delete_records('block_nvq_matrix_cleared_archive', ['courseid' => $courseid]);
 
         $DB->execute("
             DELETE FROM {block_nvq_matrix_evidence_types}

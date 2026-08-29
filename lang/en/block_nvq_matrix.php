@@ -32,6 +32,8 @@ $string['nvq_matrix:viewall']      = 'View all students in the NVQ Competence Ma
 $string['nvq_matrix:grade']        = 'Set the unit grade in the NVQ Competence Matrix';
 $string['nvq_matrix:sample']       = 'Set the unit sampling status in the NVQ Competence Matrix';
 $string['nvq_matrix:iqacomment']   = 'Set the unit-level IQA comment in the NVQ Competence Matrix';
+$string['nvq_matrix:finalstatus']  = 'Set the final Pass/Fail status in the NVQ Competence Matrix';
+$string['nvq_matrix:manageassessor'] = 'Set the designated assessor in the NVQ Competence Matrix';
 $string['nvq_matrix:exportportfolio'] = 'Export a student\'s full portfolio from the NVQ Competence Matrix';
 $string['nvq_matrix:deletearchived'] = 'Permanently delete an archived student\'s NVQ matrix data for a course';
 
@@ -160,6 +162,18 @@ $string['privacy:metadata:block_nvq_matrix_status:setby'] = 'The ID of the asses
 $string['privacy:metadata:block_nvq_matrix_status:timemodified'] = 'The date and time the final status was last set.';
 $string['privacy:metadata:block_nvq_matrix_status:notifiedtime'] = 'The date and time the completion notification was last sent to the student, if ever.';
 $string['privacy:metadata:block_nvq_matrix_status:notifiedby'] = 'The ID of the assessor who last sent the completion notification.';
+$string['privacy:metadata:block_nvq_matrix_assessor'] = 'The designated assessor for a student\'s course.';
+$string['privacy:metadata:block_nvq_matrix_assessor:courseid'] = 'The ID of the course this assessor assignment applies to.';
+$string['privacy:metadata:block_nvq_matrix_assessor:userid'] = 'The ID of the user assigned as assessor.';
+$string['privacy:metadata:block_nvq_matrix_assessor:setby'] = 'The ID of the user who made this assessor assignment.';
+$string['privacy:metadata:block_nvq_matrix_assessor:timemodified'] = 'When this assessor assignment was last changed.';
+$string['privacy:metadata:block_nvq_matrix_cleared_archive'] = 'A record of when an archived student\'s NVQ matrix data was permanently deleted.';
+$string['privacy:metadata:block_nvq_matrix_cleared_archive:studentid'] = 'The ID of the student whose archived data was deleted.';
+$string['privacy:metadata:block_nvq_matrix_cleared_archive:courseid'] = 'The ID of the course the deleted data belonged to.';
+$string['privacy:metadata:block_nvq_matrix_cleared_archive:timecleared'] = 'When the archived data was deleted.';
+$string['privacy:metadata:block_nvq_matrix_cleared_archive:clearedby'] = 'The ID of the user who deleted the archived data.';
+$string['privacy:assessorrole:assignee'] = 'Assigned as assessor';
+$string['privacy:assessorrole:assignedby'] = 'Made this assessor assignment';
 $string['privacy:metadata:block_nvq_matrix:core_message'] = 'This plugin sends a completion notification to the student via Moodle\'s own messaging system when an assessor confirms they want to notify the student of their final status.';
 
 $string['privacy:metadata:block_nvq_matrix_unit_comments'] = 'Optional unit-level assessor and IQA comments recorded for a student against a unit.';
