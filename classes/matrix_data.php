@@ -671,7 +671,30 @@ class matrix_data {
                 $unitsdata[] = [
                     'topicid'      => $topic->id,
                     'unittitle'    => format_string($topic->title),
-                    'coursename'   => $topiccoursemap[$topic->id] ?? '',
+                    // Real bug fixed here (v26.6.4): same root cause as
+                    // the v26.6.3 courseid fix just above/below, but a
+                    // SEPARATE map ($topiccoursemap, singular "course" -
+                    // easy to miss alongside $topiccourseidmap) missed
+                    // in that fix. This one feeds the course name label
+                    // actually shown on each unit, not a grading action's
+                    // courseid - reported live after v26.6.3: a unit
+                    // shared between two pathways of the same qualification
+                    // (client's "shared competence library, per-pathway
+                    // unit selection" design) always displayed the
+                    // alphabetically-first course's name (the query above
+                    // orders by c.fullname ASC and keeps the first match),
+                    // regardless of which course/pathway was actually
+                    // being viewed. Use the current course's own name when
+                    // on a specific course page - $courseidnamemap is
+                    // guaranteed to have an entry for $courseid here, since
+                    // it's built from the same recordset and this topic is
+                    // only in $unitsdata because it's genuinely linked to
+                    // the course being viewed. Only fall back to the
+                    // shared/ambiguous map on the unscoped all-courses view,
+                    // same condition as the courseid fix.
+                    'coursename'   => $oncoursepage
+                        ? ($courseidnamemap[$courseid] ?? ($topiccoursemap[$topic->id] ?? ''))
+                        : ($topiccoursemap[$topic->id] ?? ''),
                     'logroups'     => $logroups,
                     'progresstext' => get_string('unitprogress', 'block_nvq_matrix', [
                         'met'   => $unitmet,

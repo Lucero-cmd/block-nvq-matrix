@@ -17,6 +17,32 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.4 (1.20.4) — Follow-up to v26.6.3's shared-unit courseid fix,
+ *   reported live immediately after that deploy: the grade/sample/
+ *   comment courseid was fixed, but a SEPARATE map feeding the course
+ *   NAME shown inside each unit's expanded body -
+ *   $topiccoursemap (singular "course", easy to miss alongside
+ *   $topiccourseidmap right next to it) - was missed. Same root cause:
+ *   it deliberately keeps the alphabetically-first course name for a
+ *   topic shared across more than one course/pathway (the query orders
+ *   by c.fullname ASC and keeps the first match), so a unit shared
+ *   between two pathways of the same qualification (client's shared
+ *   competence-library design, one topic satisfying multiple pathways)
+ *   always displayed the wrong pathway's name inside the unit body,
+ *   regardless of which course was actually being viewed. Confirmed
+ *   live on two separate course pairs and both an archived and a
+ *   normally-enrolled student, ruling out an archived-student-specific
+ *   cause. Fixed the same way as v26.6.3's courseid fix: use the
+ *   current course's own name ($courseidnamemap[$courseid], keyed
+ *   directly by courseid so it carries no cross-course ambiguity)
+ *   whenever $oncoursepage is true; $topiccoursemap now only used on
+ *   the unscoped all-courses view, same condition as the courseid fix.
+ *
+ *   No schema or capability change - release-string/version bump only,
+ *   bumped anyway (not left at v26.6.3's release string) so the
+ *   deployed version is unambiguous in Site Administration after the
+ *   v26.6.3 deploy/redeploy confusion this fix follows.
+ *
  * v26.6.3 (1.20.3) — Full plugin audit (permissions/grading, delete
  *   archived, upgrade path, assign-assessor, notifications, styles,
  *   privacy, backup/restore, group-scoping) requested by Lucero after
@@ -2191,7 +2217,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082701;
+$plugin->version   = 2026082801;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2206,4 +2232,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.3';
+$plugin->release   = '1.20.4';

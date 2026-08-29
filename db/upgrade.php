@@ -652,5 +652,13 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         upgrade_block_savepoint(true, 2026082701, 'nvq_matrix');
     }
 
+    if ($oldversion < 2026082801) {
+        // No schema/capability change - release-string/version bump
+        // only (matrix_data.php coursename fix, see version.php).
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026082801, 'nvq_matrix');
+    }
+
     return true;
 }
