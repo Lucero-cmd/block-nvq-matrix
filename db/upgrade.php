@@ -625,17 +625,42 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         upgrade_block_savepoint(true, 2026082601, 'nvq_matrix');
     }
 
-    if ($oldversion < 2026082701) {
-        // Finishes the deferred step flagged above (2026082601's own
-        // comment) - :deletearchived exists in the database now, so it
-        // can finally be Prevented for Company Manager here, closing the
-        // gap that made delete_archived.php's own new group-membership
-        // re-check (v26.6.3, see that file) necessary in the first
-        // place: without this, a site that ever granted Company Manager
-        // :deletearchived directly (outside its default archetype grant)
-        // would let them submit any studentid/courseid pair to that
-        // endpoint, not just their own group's. Same lookup-by-shortname
-        // and context_system pattern as 2026082101 above.
+        if ($oldversion < 2026082701) {
+        // BUGFIX: the original version of this step assumed
+        // block/nvq_matrix:deletearchived would already be registered
+        // in mdl_capabilities by the time this runs, because it's a
+        // "later" version-bump block than 2026082601 (which introduces
+        // the capability in db/access.php). That assumption is wrong:
+        // both blocks execute within the SAME call to
+        // xmldb_block_nvq_matrix_upgrade() during one upgrade run, and
+        // update_capabilities() only registers new capabilities AFTER
+        // that whole function returns. So on a fresh upgrade from
+        // before 2026082601, this capability genuinely does not exist
+        // yet at this point, and assign_capability() against it throws
+        // a coding_exception (confirmed live on production 2026-08-31).
+        // Guarded with get_capability_info() so this becomes a real
+        // no-op skip instead of a crash; the actual CAP_PREVENT is
+        // applied by a genuine follow-up version bump below, once the
+        // capability is guaranteed to exist in the database.
+        $companymanagerrole = $DB->get_record('role', ['shortname' => 'companymanager']);
+        if ($companymanagerrole && get_capability_info('block/nvq_matrix:deletearchived')) {
+            $systemcontext = context_system::instance();
+            assign_capability(
+                'block/nvq_matrix:deletearchived',
+                CAP_PREVENT,
+                $companymanagerrole->id,
+                $systemcontext->id,
+                true
+            );
+        }
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026082701, 'nvq_matrix');
+    }
+    if ($oldversion < 2026083101) {
+        // Genuine follow-up step (real separate upgrade pass this
+        // time) - applies the CAP_PREVENT that 2026082701 above had to
+        // skip on any site upgrading from before 2026082601, since the
+        // capability is now guaranteed to be registered.
         $companymanagerrole = $DB->get_record('role', ['shortname' => 'companymanager']);
         if ($companymanagerrole) {
             $systemcontext = context_system::instance();
@@ -647,9 +672,8 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
                 true
             );
         }
-
         // Nvq_matrix savepoint reached.
-        upgrade_block_savepoint(true, 2026082701, 'nvq_matrix');
+        upgrade_block_savepoint(true, 2026083101, 'nvq_matrix');
     }
 
     if ($oldversion < 2026082801) {
