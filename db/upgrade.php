@@ -656,31 +656,6 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026082701, 'nvq_matrix');
     }
-    if ($oldversion < 2026083101) {
-        // BUGFIX #2: this step, despite being a separate version-bump
-        // block, still executes in the SAME upgrade run as 2026082601/
-        // 2026082701 on any site upgrading from before 2026082601 -
-        // update_capabilities() only runs once, after ALL plugins finish
-        // upgrading in this run, never between blocks within one file's
-        // upgrade function. So the capability still does not exist yet
-        // here either (confirmed live on production 2026-08-31, same
-        // failure as 2026082701). Guarded the same way; the actual
-        // CAP_PREVENT assignment is deferred to a genuinely separate
-        // future deploy (its own git push/pull/upgrade cycle, run only
-        // after this one has fully completed at least once).
-        $companymanagerrole = $DB->get_record('role', ['shortname' => 'companymanager']);
-        if ($companymanagerrole && get_capability_info('block/nvq_matrix:deletearchived')) {
-            $systemcontext = context_system::instance();
-            assign_capability(
-                'block/nvq_matrix:deletearchived',
-                CAP_PREVENT,
-                $companymanagerrole->id,
-                $systemcontext->id,
-                true
-            );
-        }
-        upgrade_block_savepoint(true, 2026083101, 'nvq_matrix');
-    }
 
     if ($oldversion < 2026082801) {
         // No schema/capability change - release-string/version bump
@@ -706,6 +681,30 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026083001, 'nvq_matrix');
     }
-
+    if ($oldversion < 2026083101) {
+        // BUGFIX #2: this step, despite being a separate version-bump
+        // block, still executes in the SAME upgrade run as 2026082601/
+        // 2026082701 on any site upgrading from before 2026082601 -
+        // update_capabilities() only runs once, after ALL plugins finish
+        // upgrading in this run, never between blocks within one file's
+        // upgrade function. So the capability still does not exist yet
+        // here either (confirmed live on production 2026-08-31, same
+        // failure as 2026082701). Guarded the same way; the actual
+        // CAP_PREVENT assignment is deferred to a genuinely separate
+        // future deploy (its own git push/pull/upgrade cycle, run only
+        // after this one has fully completed at least once).
+        $companymanagerrole = $DB->get_record('role', ['shortname' => 'companymanager']);
+        if ($companymanagerrole && get_capability_info('block/nvq_matrix:deletearchived')) {
+            $systemcontext = context_system::instance();
+            assign_capability(
+                'block/nvq_matrix:deletearchived',
+                CAP_PREVENT,
+                $companymanagerrole->id,
+                $systemcontext->id,
+                true
+            );
+        }
+        upgrade_block_savepoint(true, 2026083101, 'nvq_matrix');
+    }
     return true;
 }
