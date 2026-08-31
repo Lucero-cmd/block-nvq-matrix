@@ -1000,10 +1000,20 @@ $topbar = html_writer::link(
 // page-level topbar link — same capability/student gating and the same
 // export.php destination + confirm-dialog message as before, just
 // handed to the template instead of built as an html_writer::link here.
+//
+// courseid added to the export URL (v26.6.5, client decision - see
+// classes/portfolio_export.php's build_matrix_tree() docblock): the
+// export itself is now restricted to the single course being viewed,
+// not every course the student has ever had data on - $resolvedcourseid
+// is exactly that course, already validated above. Also now gated on
+// $resolvedcourseid being genuinely resolved (not the idle/unresolved
+// 0 state), since export.php requires courseid and there is nothing
+// meaningful to export without one.
 $templatedata['showexportbutton'] = false;
-if ($canexportportfolio && $studentid) {
+if ($canexportportfolio && $studentid && $resolvedcourseid) {
     $exporturl = new moodle_url('/blocks/nvq_matrix/export.php', [
         'studentid' => $studentid,
+        'courseid'  => $resolvedcourseid,
         'sesskey'   => sesskey(),
     ]);
     $exportstudent = $students[$studentid] ?? $DB->get_record('user', ['id' => $studentid]);

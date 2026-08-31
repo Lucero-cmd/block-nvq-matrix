@@ -660,5 +660,22 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         upgrade_block_savepoint(true, 2026082801, 'nvq_matrix');
     }
 
+    if ($oldversion < 2026082901) {
+        // No schema/capability change - release-string/version bump
+        // only (Export Portfolio single-course restriction, see
+        // version.php).
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026082901, 'nvq_matrix');
+    }
+
+    if ($oldversion < 2026083001) {
+        // No schema/capability change - release-string/version bump
+        // only (reverses part of the previous step - see version.php).
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026083001, 'nvq_matrix');
+    }
+
     return true;
 }

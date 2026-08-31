@@ -23,11 +23,19 @@
  * archetypes listed. Client accepted that as "for now" at the time;
  * v26.4.18 widens it back to teachers by switching to the same
  * per-enrolled-course CONTEXT_COURSE check view.php's $canviewall etc.
- * already use, rather than a single CONTEXT_SYSTEM check. Not scoped to
- * a specific course/studentid pairing beyond that - matches this
- * plugin's general permission model (a capability held on any one
- * course is enough to reach this dashboard-wide action), same as how
- * the picker itself already works.
+ * already use, rather than a single CONTEXT_SYSTEM check.
+ *
+ * RESTRICTED TO A SINGLE COURSE (v26.6.5, client decision - see
+ * classes/portfolio_export.php's build_matrix_tree() docblock): the
+ * export itself now only ever covers the one course passed in, not
+ * every course the student has ever had data on. The permission check
+ * below was tightened to match - previously "the capability held on
+ * ANY one enrolled course is enough" (matching this plugin's general
+ * dashboard-wide picker model at the time), which would now let someone
+ * with :exportportfolio on an unrelated course they teach export THIS
+ * student's data from a course they hold no role on at all, once the
+ * export itself became course-specific. Now requires the capability on
+ * the SPECIFIC course being exported, not just any course.
  *
  * @package   block_nvq_matrix
  * @copyright 2026 Alex D&D Training Ltd
@@ -39,25 +47,15 @@ require_once(__DIR__ . '/../../config.php');
 use block_nvq_matrix\portfolio_export;
 
 $studentid = required_param('studentid', PARAM_INT);
+$courseid  = required_param('courseid', PARAM_INT);
 
-require_login();
+$course = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
+require_login($course);
 
-$PAGE->set_context(context_system::instance());
+$coursecontext = context_course::instance($courseid);
+$PAGE->set_context($coursecontext);
 
-$canexport = false;
-foreach (enrol_get_users_courses($USER->id, true, ['id']) as $course) {
-    if (has_capability('block/nvq_matrix:exportportfolio', context_course::instance($course->id))) {
-        $canexport = true;
-        break;
-    }
-}
-if (!$canexport) {
-    // Reuses Moodle's own exception machinery for the correct
-    // message/formatting rather than hand-constructing one - also
-    // still correctly lets a true site admin through even with zero
-    // enrolled courses, since admins bypass capability checks entirely.
-    require_capability('block/nvq_matrix:exportportfolio', context_system::instance());
-}
+require_capability('block/nvq_matrix:exportportfolio', $coursecontext);
 
 $student = $DB->get_record('user', ['id' => $studentid], 'id', IGNORE_MISSING);
 if (!$student) {
@@ -66,4 +64,4 @@ if (!$student) {
 
 require_sesskey();
 
-portfolio_export::send_zip($studentid);
+portfolio_export::send_zip($studentid, $courseid);

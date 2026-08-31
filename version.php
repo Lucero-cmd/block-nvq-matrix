@@ -17,6 +17,61 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.6 (1.20.6) — Reverses part of v26.6.5, client decision: that
+ *   version made build_portfolio_summary_pdfs() skip the summary PDF
+ *   entirely when the student had no genuine Assessment
+ *   Plan/Sampling Plan/Sampling Record for the exported course.
+ *   Reversed - this zip gets submitted to whoever is in charge of the
+ *   student, and the client wants a "nothing entered yet" state to
+ *   actively appear in that paperwork, not be silently omitted.
+ *   local_nvqportfolio's own renderer already produces that page
+ *   correctly on its own (headers plus "No assessment plan" text etc.)
+ *   - the v26.6.5 skip-check just needed to stop skipping it. The
+ *   single-course restriction itself (the actual bug fix in v26.6.5 -
+ *   no longer bundling an unrelated second course's plan) is
+ *   unchanged and stays in place.
+ *
+ *   No schema or capability change - release-string/version bump only.
+ *
+ * v26.6.5 (1.20.5) — Export Portfolio restricted to a single course,
+ *   client decision after live testing: previously (deliberately, per
+ *   client's own earlier request quoted in the code) bundled a
+ *   Portfolio_Summary.pdf for EVERY course the student had ever had an
+ *   Assessment Plan on, courseid-suffixed once there was more than one.
+ *   Reversed - a student with an unrelated second course's plan on file
+ *   had that bundled into an export for a course it had nothing to do
+ *   with. classes/portfolio_export.php's send_zip()/
+ *   build_matrix_tree()/fetch_final_status()/
+ *   build_portfolio_summary_pdfs() all now take an explicit $courseid
+ *   and scope every query to it - grades/sampling/unit_comments/status
+ *   by their own courseid column, topics/evidence via an added join to
+ *   block_exacompcoutopi_mm filtered by courseid (same shared-topic
+ *   concern as the courseid/coursename fixes in v26.6.3/v26.6.4, just
+ *   inside the export path instead of the on-screen matrix), and the
+ *   local_nvqportfolio summary PDF now checks that ONE course's
+ *   Assessment Plan directly instead of every distinct course the
+ *   student has ever had one on. export.php now requires courseid as a
+ *   parameter and checks :exportportfolio against that specific course
+ *   context rather than "any one enrolled course" - tightened to match,
+ *   since the old "any course is enough" permission model would
+ *   otherwise let someone with the capability on an unrelated course
+ *   export a student's data from a course they hold no role on at all,
+ *   once the export itself became course-specific. view.php's export
+ *   button now only renders once a specific course has actually
+ *   resolved, and passes it through.
+ *
+ *   Fixed alongside this: build_portfolio_summary_pdfs()'s skip-if-
+ *   empty check tested the final RENDERED HTML STRING
+ *   (`trim($body) === ''`), which local_nvqportfolio's renderer never
+ *   actually returns empty - it always emits headers and "No assessment
+ *   plan" / "No sampling plans" / "No sampling records" text even with
+ *   zero real data. A student with nothing recorded for a course still
+ *   got a downloadable (near-blank) PDF bundled into their export. Now
+ *   checks for a genuine Assessment Plan row, Sampling Plan, or
+ *   Sampling Record directly before rendering anything at all.
+ *
+ *   No schema or capability change - release-string/version bump only.
+ *
  * v26.6.4 (1.20.4) — Follow-up to v26.6.3's shared-unit courseid fix,
  *   reported live immediately after that deploy: the grade/sample/
  *   comment courseid was fixed, but a SEPARATE map feeding the course
@@ -2217,7 +2272,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026082801;
+$plugin->version   = 2026083001;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2232,4 +2287,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.4';
+$plugin->release   = '1.20.6';
