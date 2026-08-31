@@ -91,18 +91,22 @@ defined('MOODLE_INTERNAL') || die();
 class portfolio_export {
 
     /**
-     * Entry point: builds the zip for one student and sends it to the
-     * browser as a forced download, then exits. Caller must already have
-     * verified capability before calling this.
+     * Entry point: builds the zip for one student, restricted to one
+     * course, and sends it to the browser as a forced download, then
+     * exits. Caller must already have verified capability before
+     * calling this.
      *
      * @param int $studentid The student whose portfolio is being exported.
+     * @param int $courseid The single course to restrict this export to
+     *            (v26.6.5 - see build_matrix_tree()'s docblock for why
+     *            there is no more "every course" mode).
      */
-    public static function send_zip(int $studentid): void {
+    public static function send_zip(int $studentid, int $courseid): void {
         global $DB;
 
         $student = $DB->get_record('user', ['id' => $studentid], '*', MUST_EXIST);
 
-        $tree = self::build_matrix_tree($studentid);
+        $tree = self::build_matrix_tree($studentid, $courseid);
 
         // itemid => stored_file, deduplicated across every descriptor
         // that references the same evidence item.
@@ -110,7 +114,7 @@ class portfolio_export {
 
         $overviewpages = self::render_overview_pages($tree, $student, $files);
 
-        $zippath = self::assemble_zip($studentid, $student, $tree, $overviewpages, $files);
+        $zippath = self::assemble_zip($studentid, $courseid, $student, $tree, $overviewpages, $files);
 
         $filename = clean_filename(
             'portfolio_' . fullname($student) . '_' . userdate(time(), '%Y-%m-%d') . '.zip'
@@ -124,15 +128,25 @@ class portfolio_export {
      * Mirrors matrix_data::build()'s data-gathering exactly (same tables,
      * same joins - see that method for the reasoning behind each query),
      * but returns a plain nested array rather than Mustache template
-     * data, and deliberately covers ALL of the student's units across
-     * ALL their courses in one call (matrix_data::build() does the same
-     * when $oncoursepage is false) - a portfolio export should never be
-     * scoped to a single course.
+     * data.
+     *
+     * RESTRICTED TO A SINGLE COURSE (v26.6.5, client decision - see
+     * version.php changelog): originally covered ALL of the student's
+     * units across every course they'd ever had evidence/status/grades
+     * on, matching matrix_data::build()'s own unscoped-view behaviour.
+     * Reversed after live testing showed a student with two courses
+     * (only one currently selected/relevant) had the OTHER course's
+     * summary bundled into the export too - client wants the export
+     * strictly limited to the course actually being viewed when the
+     * button is clicked, full stop, no "other courses too" fallback.
      *
      * @param int $studentid
+     * @param int $scopecourseid The single course this export is
+     *            restricted to. Required, not optional - there is no
+     *            more "every course" fallback mode.
      * @return array{topics: array, statusbycourse: array, coursenames: array}
      */
-    private static function build_matrix_tree(int $studentid): array {
+    private static function build_matrix_tree(int $studentid, int $scopecourseid): array {
         global $DB;
 
         // block_nvq_matrix_status is deliberately independent of
@@ -144,18 +158,25 @@ class portfolio_export {
         // lines down still carries it - final status must never
         // silently disappear from the export just because this student
         // happens to have no eportfolio-linked topics right now.
-        $statusinfo = self::fetch_final_status($studentid);
+        $statusinfo = self::fetch_final_status($studentid, $scopecourseid);
 
-        // Same topic-resolution fallback matrix_data::build() uses when
-        // not on a course page: every topic this student has eportfolio
-        // evidence linked against.
+        // Every topic genuinely linked to $scopecourseid AND that this
+        // student has eportfolio evidence against - the extra join to
+        // block_exacompcoutopi_mm (scoped by courseid, not just topicid)
+        // is what actually restricts this to one course; without it, a
+        // topic shared with another course (same "shared competence
+        // library, per-pathway unit selection" design already seen in
+        // block_nvq_matrix's own matrix view) would pull that other
+        // course's data in too.
         $topicids = $DB->get_fieldset_sql("
             SELECT DISTINCT dtm.topicid
               FROM {block_exacompcompuser_mm} mm
               JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
+              JOIN {block_exacompcoutopi_mm} ct ON ct.topicid = dtm.topicid
              WHERE mm.userid         = :userid
                AND mm.eportfolioitem = 1
-        ", ['userid' => $studentid]);
+               AND ct.courseid       = :scopecourseid
+        ", ['userid' => $studentid, 'scopecourseid' => $scopecourseid]);
 
         if (empty($topicids)) {
             return [
@@ -169,19 +190,24 @@ class portfolio_export {
 
         $topics = $DB->get_records_select('block_exacomptopics', "id $topicinsql", $topicparams, 'id ASC');
 
-        $topiccourseidmap = [];
+        // $topicids above is already restricted to $scopecourseid, so
+        // every topic here genuinely belongs to it - no "lowest courseid
+        // wins" ambiguity resolution needed (unlike matrix_data.php's
+        // $topiccourseidmap, which exists only because THAT code has to
+        // handle topics shared across courses with no single course to
+        // pin to). $topiccoursenames still comes from this query since a
+        // topic can still be linked to OTHER courses too in the
+        // database - just narrowed here so only $scopecourseid's own
+        // name is ever picked up for this export.
         $coursemaprs = $DB->get_recordset_sql("
             SELECT ct.id, ct.topicid, ct.courseid, c.fullname
               FROM {block_exacompcoutopi_mm} ct
               JOIN {course} c ON c.id = ct.courseid
-             WHERE ct.topicid $topicinsql
-        ", $topicparams);
+             WHERE ct.topicid  $topicinsql
+               AND ct.courseid = :scopecourseid2
+        ", $topicparams + ['scopecourseid2' => $scopecourseid]);
         $topiccoursenames = [];
         foreach ($coursemaprs as $row) {
-            if (!isset($topiccourseidmap[$row->topicid])
-                    || (int) $row->courseid < $topiccourseidmap[$row->topicid]) {
-                $topiccourseidmap[$row->topicid] = (int) $row->courseid;
-            }
             $topiccoursenames[(int) $row->courseid] = format_string($row->fullname);
         }
         $coursemaprs->close();
@@ -193,31 +219,42 @@ class portfolio_export {
              WHERE dtm.topicid $topicinsql
         ", $topicparams);
 
-        // Evidence, keyed by descriptor id - same query matrix_data uses,
-        // mmid is the specific item<->criterion link (a file can be
-        // linked to several descriptors, each its own mm row).
+        // Evidence, keyed by descriptor id - restricted to descriptors
+        // that belong to this course's topics (the extra join + IN
+        // clause below), same reasoning as the topicids query above:
+        // without it, this would pull the student's evidence for every
+        // course's competencies, not just this one's.
         $evidencerows = $DB->get_records_sql("
             SELECT mm.id AS mmid, mm.compid AS descriptorid,
                    i.id AS itemid, i.name AS itemname, i.type AS itemtype,
                    i.url AS itemurl, i.userid AS itemuserid, i.intro AS itemintro
               FROM {block_exacompcompuser_mm} mm
               JOIN {block_exaportitem} i ON i.id = mm.activityid
+              JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
              WHERE mm.userid         = :userid
                AND mm.eportfolioitem = 1
-        ", ['userid' => $studentid]);
+               AND dtm.topicid $topicinsql
+        ", array_merge(['userid' => $studentid], $topicparams));
 
         $evidencebydescriptor = [];
         $linkeditemids = [];
+        $validmmids = [];
         foreach ($evidencerows as $row) {
             $evidencebydescriptor[(int) $row->descriptorid][] = $row;
             $linkeditemids[(int) $row->itemid] = true;
+            $validmmids[(int) $row->mmid] = true;
         }
 
+        // block_nvq_matrix_evidence_comments has no courseid column of
+        // its own (see classes/privacy/provider.php's own note on this
+        // same table) - scoped here by keeping only rows whose mmid
+        // belongs to the course-restricted evidence set built above,
+        // rather than by a WHERE clause.
         $commentrows = $DB->get_records('block_nvq_matrix_evidence_comments', ['studentid' => $studentid]);
         $commentmap = [];
         $commentids = [];
         foreach ($commentrows as $crow) {
-            if (empty($crow->mmid)) {
+            if (empty($crow->mmid) || !isset($validmmids[(int) $crow->mmid])) {
                 continue;
             }
             $commentmap[(int) $crow->mmid] = $crow;
@@ -232,9 +269,9 @@ class portfolio_export {
             }
         }
 
-        $graderows   = $DB->get_records('block_nvq_matrix_grades', ['studentid' => $studentid]);
-        $samplerows  = $DB->get_records('block_nvq_matrix_sampling', ['studentid' => $studentid]);
-        $commentrows2 = $DB->get_records('block_nvq_matrix_unit_comments', ['studentid' => $studentid]);
+        $graderows   = $DB->get_records('block_nvq_matrix_grades', ['studentid' => $studentid, 'courseid' => $scopecourseid]);
+        $samplerows  = $DB->get_records('block_nvq_matrix_sampling', ['studentid' => $studentid, 'courseid' => $scopecourseid]);
+        $commentrows2 = $DB->get_records('block_nvq_matrix_unit_comments', ['studentid' => $studentid, 'courseid' => $scopecourseid]);
 
         // Every user id anywhere in these rows that needs a display name -
         // resolved once, in a single query, rather than per-row. (Final
@@ -315,7 +352,9 @@ class portfolio_export {
 
         foreach ($topics as $topic) {
             $tid = (int) $topic->id;
-            $courseid = $topiccourseidmap[$tid] ?? 0;
+            // Every topic here is already restricted to $scopecourseid
+            // (see the topicids query above) - no map lookup needed.
+            $courseid = $scopecourseid;
             $key = $tid . ':' . $courseid;
 
             $descriptors = [];
@@ -400,10 +439,16 @@ class portfolio_export {
      * @return array{statusbycourse: array, coursenames: array} courseid
      *              keyed in both.
      */
-    private static function fetch_final_status(int $studentid): array {
+    /**
+     * @param int $studentid
+     * @param int $scopecourseid Restricts the status lookup to this one
+     *            course (v26.6.5 - see build_matrix_tree()'s docblock).
+     * @return array{statusbycourse: array, coursenames: array}
+     */
+    private static function fetch_final_status(int $studentid, int $scopecourseid): array {
         global $DB;
 
-        $statusrows = $DB->get_records('block_nvq_matrix_status', ['studentid' => $studentid]);
+        $statusrows = $DB->get_records('block_nvq_matrix_status', ['studentid' => $studentid, 'courseid' => $scopecourseid]);
         if (empty($statusrows)) {
             return ['statusbycourse' => [], 'coursenames' => []];
         }
@@ -805,6 +850,7 @@ class portfolio_export {
      * every other Moodle-generated zip) and returns its temp path.
      *
      * @param int $studentid
+     * @param int $courseid Restricts the summary PDF to this one course.
      * @param \stdClass $student
      * @param array $tree
      * @param array $overviewpages relative filename => html, from
@@ -814,6 +860,7 @@ class portfolio_export {
      */
     private static function assemble_zip(
         int $studentid,
+        int $courseid,
         \stdClass $student,
         array $tree,
         array $overviewpages,
@@ -834,17 +881,13 @@ class portfolio_export {
             $filestozip['Matrix_Overview/' . $filename] = [$html];
         }
 
-        $summarypdfs = self::build_portfolio_summary_pdfs($studentid);
-        foreach ($summarypdfs as $courseid => $pdfbytes) {
-            // One student can have Assessment Plan/Sampling data on more
-            // than one course (distinct course ids, per client) - each
-            // gets its own summary rather than only exporting the first.
-            // A single course keeps the plain filename for the common
-            // case; only courseid-suffix once there's more than one.
-            $name = count($summarypdfs) > 1
-                ? 'Portfolio_Summary_' . $courseid . '.pdf'
-                : 'Portfolio_Summary.pdf';
-            $filestozip[$name] = [$pdfbytes];
+        // At most one entry now that this is restricted to a single
+        // course (v26.6.5) - always the plain filename, no more
+        // courseid-suffixing for a second/third course that can no
+        // longer be present.
+        $summarypdfs = self::build_portfolio_summary_pdfs($studentid, $courseid);
+        foreach ($summarypdfs as $pdfbytes) {
+            $filestozip['Portfolio_Summary.pdf'] = [$pdfbytes];
         }
 
         foreach ($files as $itemid => $storedfile) {
@@ -871,18 +914,30 @@ class portfolio_export {
      * guards its own call into this plugin - never assumes it's
      * installed.
      *
-     * Builds one summary PDF per distinct course id the student has an
-     * Assessment Plan on, rather than only the first - a student with
-     * more than one course each has its own courseid, so each gets its
-     * own summary (chat: "a student with multiple courses have varying
-     * course ID so i think that can make it easier").
+     * RESTRICTED TO A SINGLE COURSE (v26.6.5, client decision - see
+     * build_matrix_tree()'s docblock): previously built one summary PDF
+     * per every distinct course the student had ever had an Assessment
+     * Plan on. Now takes the one course this export is scoped to and
+     * only ever produces that single PDF.
+     *
+     * ALWAYS included, even with nothing recorded for this course
+     * (v26.6.6, client decision, reversing part of v26.6.5): this zip
+     * gets submitted to whoever is in charge of the student, and an
+     * absent PDF read as "nothing to show" - the client wants a
+     * "nothing entered yet" state to actively appear in the submitted
+     * paperwork, not be silently omitted. local_nvqportfolio's own
+     * renderer already produces that page correctly on its own (headers
+     * plus "No assessment plan" / "No sampling plans" / "No sampling
+     * records" text) - this function just needs to stop skipping it.
      *
      * @param int $studentid
-     * @return array courseid => raw PDF bytes. Empty if local_nvqportfolio
-     *                isn't installed or has no data for this student.
+     * @param int $courseid The single course to render.
+     * @return array Either empty (local_nvqportfolio not installed, or
+     *               its renderer somehow still returns nothing), or a
+     *               single-element array containing the raw PDF bytes.
      */
-    private static function build_portfolio_summary_pdfs(int $studentid): array {
-        global $CFG, $DB;
+    private static function build_portfolio_summary_pdfs(int $studentid, int $courseid): array {
+        global $CFG;
 
         if (!is_dir($CFG->dirroot . '/local/nvqportfolio')) {
             return [];
@@ -892,44 +947,32 @@ class portfolio_export {
             return [];
         }
 
-        $courseids = $DB->get_fieldset_select(
-            'local_nvqport_ap',
-            'DISTINCT courseid',
-            'studentid = :studentid',
-            ['studentid' => $studentid]
-        );
-        if (empty($courseids)) {
+        require_once($CFG->libdir . '/pdflib.php');
+
+        $body = local_nvqportfolio_render_portfolio_pdf_html($courseid, $studentid);
+        if (trim((string) $body) === '') {
+            // local_nvqportfolio's renderer always emits headers and its
+            // own "nothing entered" text, so this shouldn't actually be
+            // reachable in practice - kept only as a genuine last-resort
+            // guard (e.g. the function returning '' outright in some
+            // future version), not as the "was there real data" check
+            // v26.6.5 mistakenly used this same line for.
             return [];
         }
 
-        require_once($CFG->libdir . '/pdflib.php');
+        $pdf = new \pdf();
+        $pdf->SetCreator('Moodle');
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetMargins(15, 15, 15);
+        $pdf->SetAutoPageBreak(true, 15);
+        $pdf->AddPage();
+        $pdf->writeHTML($body, true, false, true, false, '');
 
-        $pdfs = [];
-        foreach ($courseids as $courseid) {
-            $courseid = (int) $courseid;
-            $body = local_nvqportfolio_render_portfolio_pdf_html($courseid, $studentid);
-            if (trim((string) $body) === '') {
-                // Defensive: skip a course that turned out to have no
-                // renderable content rather than zipping a blank PDF.
-                continue;
-            }
-
-            $pdf = new \pdf();
-            $pdf->SetCreator('Moodle');
-            $pdf->setPrintHeader(false);
-            $pdf->setPrintFooter(false);
-            $pdf->SetMargins(15, 15, 15);
-            $pdf->SetAutoPageBreak(true, 15);
-            $pdf->AddPage();
-            $pdf->writeHTML($body, true, false, true, false, '');
-
-            // 'S' = return as string rather than 'D' (force download) -
-            // see local_nvqportfolio's own export.php for the download
-            // variant this mirrors.
-            $pdfs[$courseid] = $pdf->Output('portfolio_summary.pdf', 'S');
-        }
-
-        return $pdfs;
+        // 'S' = return as string rather than 'D' (force download) -
+        // see local_nvqportfolio's own export.php for the download
+        // variant this mirrors.
+        return [$pdf->Output('portfolio_summary.pdf', 'S')];
     }
 
     /**
