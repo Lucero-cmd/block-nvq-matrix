@@ -26,6 +26,8 @@ defined('MOODLE_INTERNAL') || die();
 
 $string['pluginname']              = 'NVQ Competence Matrix';
 $string['messageprovider:coursecomplete'] = 'Course completion notifications';
+$string['messageprovider:coursecomplete'] = 'Course completion notifications';
+$string['messageprovider:assessorsubmission'] = 'Assessor evidence submission notifications';
 $string['nvq_matrix:addinstance']  = 'Add an NVQ Competence Matrix block';
 $string['nvq_matrix:myaddinstance']= 'Add an NVQ Competence Matrix block to My Dashboard';
 $string['nvq_matrix:viewall']      = 'View all students in the NVQ Competence Matrix';
