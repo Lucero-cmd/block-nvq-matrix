@@ -553,6 +553,42 @@ if ($canviewall) {
     );
     $evidencecourseids = array_diff($evidencecourseids, array_map('intval', $clearedcourseids));
 
+    // BUGFIX: the query above finds a courseid purely via shared TOPIC
+    // linkage (block_exacompcoutopi_mm), not via any real connection to
+    // this specific student and course. Two courses can legitimately
+    // share the same topic/unit structure (e.g. two NVQ route variants
+    // built on identical learning criteria, different durations) - in
+    // that case a student with real evidence under course A gets course
+    // B pulled in too, purely because the topic happens to be linked to
+    // both, even though the student was never on course B at all.
+    // Confirmed live: courseid 2 and 16 share topicid 10, causing course
+    // 16 to wrongly show as "(Archived)" for students only ever on
+    // course 2.
+    //
+    // Fix: only trust an evidence-derived courseid if the student also
+    // has a genuine row in one of this plugin's own courseid-scoped
+    // tables for that exact course - the same "historical presence"
+    // signal already trusted elsewhere (matrix_data.php's final-status
+    // fix, v26.5.6, and get_portfolio_links()). A student never truly
+    // present on that course (no grade/sampling/comment/status ever
+    // recorded there) is excluded, even if the topic is shared.
+    $realcourseids = [];
+    foreach ($evidencecourseids as $ecid) {
+        $haspresence = $DB->record_exists('block_nvq_matrix_grades', [
+            'studentid' => $studentid, 'courseid' => $ecid,
+        ]) || $DB->record_exists('block_nvq_matrix_sampling', [
+            'studentid' => $studentid, 'courseid' => $ecid,
+        ]) || $DB->record_exists('block_nvq_matrix_unit_comments', [
+            'studentid' => $studentid, 'courseid' => $ecid,
+        ]) || $DB->record_exists('block_nvq_matrix_status', [
+            'studentid' => $studentid, 'courseid' => $ecid,
+        ]);
+        if ($haspresence) {
+            $realcourseids[] = $ecid;
+        }
+    }
+    $evidencecourseids = $realcourseids;
+
     // Archived = has evidence, but not in the active list above.
     $archivedcourseidsforstudent = array_diff($evidencecourseids, $mappedactivecourseids);
     $studentcourseids = array_unique(array_merge($mappedactivecourseids, $evidencecourseids));
