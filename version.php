@@ -36,13 +36,15 @@
  *   IMPORTANT - this fix is forward-looking only: notify_assessors_task
  *   advances its watermark (assessor_notify_lastid) past every row it
  *   sees regardless of whether a notification actually fired, so
- *   submissions already processed before this fix landed will NOT be
- *   retroactively notified just by deploying this. A separate one-off
- *   backfill script is needed to identify and manually re-trigger
- *   notify_assessor_of_submission() for the specific items affected -
- *   not run as part of this upgrade, since a blanket watermark reset
- *   would re-notify about every historical submission site-wide, not
- *   just the affected ones.
+ *   submissions already processed before this fix landed were NOT
+ *   retroactively notified by deploying this. A targeted backfill (only
+ *   re-notifying the specific historical items affected, not a blanket
+ *   watermark reset - which would re-notify about every historical
+ *   submission site-wide) was considered and deliberately not pursued
+ *   (client decision, 2026-09-04) - any submission made before this
+ *   version was deployed and landed on a course with no correctly-
+ *   resolved assessor at the time will not retroactively notify anyone
+ *   unless manually followed up on a case-by-case basis.
  *
  * v26.6.10 (1.20.10) — block_nvq_matrix_notified_items added to
  *   classes/privacy/provider.php - a real gap, same category as the
@@ -85,9 +87,25 @@
  *   (disaster recovery, new site) doesn't land back in the broken
  *   state. No schema change.
  *
- * v26.6.8 (1.20.8) — Fix shared topic course detection (see git commit
- *   5a6d175 for the full diff — not yet backfilled into this changelog
- *   in detail).
+ * v26.6.8 (1.20.8) — Fix shared topic course detection in view.php's
+ *   student-side archived-course switcher. Same root bug family as the
+ *   v26.6.3/v26.6.4 courseid/coursename fixes and the v26.6.11
+ *   notification fix above, hitting a fourth spot: the query that
+ *   builds a student's list of "archived" courses derives candidate
+ *   courseids purely via shared TOPIC linkage
+ *   (block_exacompcoutopi_mm), with no check that the student was ever
+ *   actually on the course being suggested. Two courses can
+ *   legitimately share the same topic/unit structure (e.g. two NVQ
+ *   route variants built on identical learning criteria, different
+ *   durations) - confirmed live: courseid 2 and 16 share topicid 10,
+ *   causing course 16 to wrongly appear as "(Archived)" for students
+ *   who were only ever on course 2 and never had any connection to 16
+ *   at all. Fixed by only trusting an evidence-derived courseid if the
+ *   student also has a genuine row in one of this plugin's own
+ *   courseid-scoped tables (grades/sampling/unit_comments/status) for
+ *   that exact course - the same "historical presence" signal already
+ *   established elsewhere (matrix_data.php's final-status fix, v26.5.6,
+ *   and get_portfolio_links()). No schema change.
  *
  * v26.6.7 (1.20.7) — Update NVQ matrix functionality and privacy
  *   handling; update portfolio export functionality; add missing
