@@ -706,5 +706,65 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         }
         upgrade_block_savepoint(true, 2026083101, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026090100) {
+        // REAL FIX for the CAP_PREVENT that 2026082601/2026082701/
+        // 2026083101 each attempted and each silently skipped.
+        //
+        // What those three steps assumed was wrong in a way that only
+        // showed up on production, not staging: their comments reasoned
+        // that get_capability_info('block/nvq_matrix:deletearchived')
+        // would return falsy because update_capabilities() hadn't run
+        // yet for THIS upgrade pass. That reasoning was sound for a
+        // fresh/staging-style upgrade, but doesn't explain what was
+        // actually found live on production 2026-09-04: the plugin's
+        // own upgrade_log showed savepoint 2026083101 reached
+        // successfully back on 2026-08-31, and every other capability
+        // introduced around the same time WAS registered correctly -
+        // only block/nvq_matrix:deletearchived itself was missing from
+        // mdl_capabilities, despite the upgrade having genuinely
+        // completed. Most likely cause: a stale opcode-cached copy of
+        // db/access.php was read by update_capabilities() during that
+        // specific run (this host's git-based deploy has no cache-bust
+        // step between a plugin file update and the next request that
+        // triggers the Moodle upgrade) - but the exact cause matters
+        // less than making this self-healing regardless of cause.
+        //
+        // Confirmed live on both staging and production (2026-09-04):
+        // calling update_capabilities('block_nvq_matrix') directly is
+        // safe and idempotent - it diffs db/access.php against what's
+        // registered and only adds what's missing, so re-running it
+        // here on every future upgrade of this plugin costs nothing on
+        // a site where everything is already in sync, and self-heals
+        // exactly this failure mode if it happens again on some future
+        // release. This is intentionally NOT scoped to
+        // :deletearchived specifically - it resyncs every capability
+        // this plugin declares, so any other capability that silently
+        // failed to register the same way is also caught here.
+        update_capabilities('block_nvq_matrix');
+
+        // Now that the capability is guaranteed to be registered
+        // (either it already was, or the resync above just fixed it),
+        // apply the actual CAP_PREVENT. Still guarded with
+        // get_capability_info() as a defensive belt-and-braces check -
+        // if this somehow still returns false after the resync above,
+        // something more fundamental is wrong and silently skipping
+        // here (rather than throwing and aborting the whole upgrade)
+        // matches this file's established caution for this capability.
+        $companymanagerrole = $DB->get_record('role', ['shortname' => 'companymanager']);
+        if ($companymanagerrole && get_capability_info('block/nvq_matrix:deletearchived')) {
+            $systemcontext = context_system::instance();
+            assign_capability(
+                'block/nvq_matrix:deletearchived',
+                CAP_PREVENT,
+                $companymanagerrole->id,
+                $systemcontext->id,
+                true
+            );
+        }
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026090100, 'nvq_matrix');
+    }
     return true;
 }

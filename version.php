@@ -17,6 +17,47 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.9 (1.20.9) — Real fix for the Company Manager CAP_PREVENT on
+ *   block/nvq_matrix:deletearchived that 1.20.6/1.20.7/1.20.8 each
+ *   attempted and each silently no-op'd. Investigated live on both
+ *   staging and production (2026-09-04): staging's DB already had the
+ *   capability registered correctly, but production's did NOT, despite
+ *   upgrade_log showing the 2026083101 savepoint reached successfully
+ *   on 2026-08-31 and every other capability from that same period
+ *   registering fine — only this one capability was missing. Root
+ *   cause not fully confirmed (leading theory: a stale opcode-cached
+ *   copy of db/access.php read by update_capabilities() during that
+ *   specific upgrade request), but rather than chase that further this
+ *   step makes the fix self-healing regardless of cause: it calls
+ *   update_capabilities('block_nvq_matrix') directly (safe, idempotent
+ *   - resyncs every capability this plugin declares against what's
+ *   registered) before attempting the CAP_PREVENT assignment, so any
+ *   future recurrence of this same silent-registration-miss - for this
+ *   capability or any other this plugin declares - self-corrects on
+ *   the next upgrade rather than needing another manual DB
+ *   investigation. Manually verified and applied directly against both
+ *   staging and production's databases on 2026-09-04 ahead of this
+ *   code fix landing, via update_capabilities()/assign_capability()
+ *   called through a one-off script — both sites already have
+ *   companymanager -> :deletearchived = CAP_PREVENT confirmed live;
+ *   this step exists so a fresh install or future full-chain upgrade
+ *   (disaster recovery, new site) doesn't land back in the broken
+ *   state. No schema change.
+ *
+ * v26.6.8 (1.20.8) — Fix shared topic course detection (see git commit
+ *   5a6d175 for the full diff — not yet backfilled into this changelog
+ *   in detail).
+ *
+ * v26.6.7 (1.20.7) — Update NVQ matrix functionality and privacy
+ *   handling; update portfolio export functionality; add missing
+ *   messageprovider:assessorsubmission lang string; three
+ *   coding_exception fixes to the 2026082701/2026083101 upgrade steps,
+ *   none of which turned out to be the actual cause of the production
+ *   registration gap fixed properly in v26.6.9 above (see
+ *   db/upgrade.php's own comments on each of those three steps for the
+ *   original, still-accurate reasoning about the ordering issue they
+ *   really did fix).
+ *
  * v26.6.6 (1.20.6) — Reverses part of v26.6.5, client decision: that
  *   version made build_portfolio_summary_pdfs() skip the summary PDF
  *   entirely when the student had no genuine Assessment
@@ -2272,7 +2313,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026083101;
+$plugin->version   = 2026090100;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2287,4 +2328,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.8';
+$plugin->release   = '1.20.9';
