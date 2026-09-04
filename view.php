@@ -398,7 +398,20 @@ if ($canviewall) {
         // itself, applied here as an ADDITIONAL inclusion path rather
         // than an exclusion filter.
         list($vcidinsql5, $vcidparams5) = $DB->get_in_or_equal($courseidlist, SQL_PARAMS_NAMED, 'vcide');
-        $evidencetopicrows = $DB->get_records_sql("
+        // get_recordset_sql(), not get_records_sql() - the first
+        // selected column (studentid) is deliberately NOT unique here
+        // (one student can have several rows, one per topic/course
+        // combination), which get_records_sql() requires for its
+        // array-key behaviour and get_recordset_sql() doesn't - a real
+        // bug caught live on staging testing (2026-09-04): using
+        // get_records_sql() here silently dropped rows on every
+        // duplicate studentid, throwing a debugging() warning per
+        // collision instead of erroring outright. This block only ever
+        // iterates via foreach and never needs keyed lookup, so a
+        // recordset is also the more correct choice regardless, same
+        // pattern already used elsewhere in this codebase (e.g.
+        // matrix_data.php's $coursemaprs/$descriptorrs).
+        $evidencetopicrows = $DB->get_recordset_sql("
             SELECT DISTINCT mm.userid AS studentid, ct.courseid, dtm.topicid
               FROM {block_exacompcompuser_mm} mm
               JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
@@ -416,6 +429,7 @@ if ($canviewall) {
             $evidencebystudentcourse[$esid][$ecid][] = $etid;
             $alltopicids[$etid] = true;
         }
+        $evidencetopicrows->close();
 
         // Every course each relevant topic is linked to (not just the
         // viewall-scoped courses) - batched in one query rather than
@@ -680,7 +694,12 @@ if ($canviewall) {
     // linked to - both needed for the evidence-only inclusion path
     // below, batched into two queries rather than one per candidate.
     $topicsbycourse = []; // courseid => [topicid, ...]
-    $topicrowsforstudent = $DB->get_records_sql("
+    // get_recordset_sql(), not get_records_sql() - same reasoning as
+    // the identical fix on the teacher-side query above: the first
+    // selected column (topicid) is deliberately NOT unique (one topic
+    // can be linked to several courses), and this block only ever
+    // iterates via foreach.
+    $topicrowsforstudent = $DB->get_recordset_sql("
         SELECT DISTINCT dtm.topicid, ct.courseid
           FROM {block_exacompcompuser_mm} mm
           JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
@@ -690,6 +709,7 @@ if ($canviewall) {
     foreach ($topicrowsforstudent as $trow) {
         $topicsbycourse[(int) $trow->courseid][] = (int) $trow->topicid;
     }
+    $topicrowsforstudent->close();
     $alltopicidsforstudent = [];
     foreach ($topicsbycourse as $tids) {
         foreach ($tids as $tid) {
