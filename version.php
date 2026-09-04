@@ -17,6 +17,32 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.12 (1.20.12) — REAL BUG: a student unenrolled from a course
+ *   BEFORE ever being graded/sampled/commented on - i.e. they only
+ *   ever uploaded evidence - was completely invisible to BOTH archive-
+ *   detection paths in view.php (the teacher-side "Show archived" list
+ *   and the student's own archived-course switcher), because both
+ *   require a row in one of this plugin's own four presence tables
+ *   (grades/sampling/unit_comments/status) - a requirement added in
+ *   v26.6.8 to fix a DIFFERENT bug (a shared topic wrongly pulling in
+ *   an unrelated course a student was never on). Confirmed live
+ *   2026-09-04: teacher unenrolled a real student from a real course as
+ *   a deliberate test - the student vanished from the matrix as
+ *   expected, but the "Show archived" checkbox itself disappeared
+ *   entirely rather than showing them, since he was the only
+ *   archived-eligible student across every course the viewer manages
+ *   and had zero rows in any of the four presence tables.
+ *
+ *   Fixed by widening both detection paths to also accept evidence-only
+ *   presence, gated behind the same ambiguity guard v26.6.8 itself
+ *   established: a candidate course is only accepted if NONE of the
+ *   topics tying the student's evidence to it are ALSO linked to a
+ *   different course the student is genuinely, currently enrolled in.
+ *   This keeps the v26.6.8 false-positive protection fully intact
+ *   (verified against a live shared-topic case, courses 7/13, during
+ *   the same investigation) while no longer excluding the legitimate
+ *   evidence-only case. No schema change.
+ *
  * v26.6.11 (1.20.11) — REAL BUG: assessor-submission notifications were
  *   silently failing for the majority of eportfolio items site-wide.
  *   notify_assessors_task trusted block_exaportitem.courseid outright
@@ -2372,7 +2398,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026090300;
+$plugin->version   = 2026090400;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2387,4 +2413,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.11';
+$plugin->release   = '1.20.12';

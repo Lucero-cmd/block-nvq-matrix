@@ -374,6 +374,109 @@ if ($canviewall) {
             $archivedstudentids[$sid] = true;
         }
 
+        // REAL BUG FIXED HERE (v26.6.12): a student unenrolled from a
+        // course BEFORE ever being graded/sampled/commented on - i.e.
+        // they only ever uploaded evidence - has zero rows in any of
+        // the four presence tables above, so they never appeared in
+        // $presencerows at all and were completely invisible here, not
+        // just missing from the list but silently causing the entire
+        // "Show archived" checkbox to vanish if they were the only
+        // archived student across every course the viewer manages (the
+        // checkbox itself is gated on !empty($archivedrows) further
+        // below). Confirmed live 2026-09-04 (client test case: a
+        // student unenrolled from a course with genuine evidence linked
+        // but no grade/sampling/comment/status ever recorded).
+        //
+        // Widen detection to also include evidence-only students, but
+        // ONLY when the evidence unambiguously belongs to this course -
+        // none of the topics tying the student to this course may also
+        // be linked to a DIFFERENT course the student is genuinely,
+        // currently enrolled in. Without this guard this would
+        // reintroduce the exact v26.6.8 bug (a shared topic pulling in
+        // an unrelated course); this is the same cross-check pattern
+        // already used by get_portfolio_links() and the v26.6.8 fix
+        // itself, applied here as an ADDITIONAL inclusion path rather
+        // than an exclusion filter.
+        list($vcidinsql5, $vcidparams5) = $DB->get_in_or_equal($courseidlist, SQL_PARAMS_NAMED, 'vcide');
+        $evidencetopicrows = $DB->get_records_sql("
+            SELECT DISTINCT mm.userid AS studentid, ct.courseid, dtm.topicid
+              FROM {block_exacompcompuser_mm} mm
+              JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
+              JOIN {block_exacompcoutopi_mm} ct ON ct.topicid = dtm.topicid
+             WHERE mm.eportfolioitem = 1
+               AND ct.courseid $vcidinsql5
+        ", $vcidparams5);
+
+        $evidencebystudentcourse = []; // sid => [cid => [topicid, ...]]
+        $alltopicids = [];
+        foreach ($evidencetopicrows as $erow) {
+            $esid = (int) $erow->studentid;
+            $ecid = (int) $erow->courseid;
+            $etid = (int) $erow->topicid;
+            $evidencebystudentcourse[$esid][$ecid][] = $etid;
+            $alltopicids[$etid] = true;
+        }
+
+        // Every course each relevant topic is linked to (not just the
+        // viewall-scoped courses) - batched in one query rather than
+        // one per candidate, matching this file's own established
+        // "avoid N+1" convention used elsewhere (see the group-members
+        // pre-fetch above).
+        $topiclinkedcourses = []; // topicid => [courseid, ...]
+        if (!empty($alltopicids)) {
+            list($atidinsql, $atidparams) = $DB->get_in_or_equal(array_keys($alltopicids), SQL_PARAMS_NAMED, 'atid');
+            $topiclinkrows = $DB->get_records_sql("
+                SELECT id, topicid, courseid FROM {block_exacompcoutopi_mm} WHERE topicid $atidinsql
+            ", $atidparams);
+            foreach ($topiclinkrows as $lrow) {
+                $topiclinkedcourses[(int) $lrow->topicid][] = (int) $lrow->courseid;
+            }
+        }
+
+        $studentenrolledidscache = []; // sid => [courseid => true], fetched once per distinct student.
+        foreach ($evidencebystudentcourse as $esid => $coursetopics) {
+            foreach ($coursetopics as $ecid => $topicids) {
+                if (in_array($ecid, $trueenrolledcourseids[$esid] ?? [], true)) {
+                    continue; // currently enrolled there, not archived.
+                }
+                if (isset($archivedpairs[$esid]) && in_array($ecid, $archivedpairs[$esid], true)) {
+                    continue; // already found via a plugin-table presence row above.
+                }
+
+                if (!isset($studentenrolledidscache[$esid])) {
+                    $studentenrolledidscache[$esid] = array_flip(array_keys(
+                        enrol_get_users_courses($esid, true, ['id'])
+                    ));
+                }
+
+                $ambiguous = false;
+                foreach ($topicids as $tid) {
+                    foreach ($topiclinkedcourses[$tid] ?? [] as $lcid) {
+                        if ($lcid !== $ecid && isset($studentenrolledidscache[$esid][$lcid])) {
+                            $ambiguous = true;
+                            break 2;
+                        }
+                    }
+                }
+                if ($ambiguous) {
+                    continue;
+                }
+
+                // Same three exclusion checks the presence-row loop
+                // above already applies - re-run identically here since
+                // this is a separate candidate source.
+                if (isset($contextbycourseid[$ecid]) && has_capability('block/nvq_matrix:viewall', $contextbycourseid[$ecid], $esid)) {
+                    continue;
+                }
+                if (isset($viewergroupmembersbycourse[$ecid]) && !isset($viewergroupmembersbycourse[$ecid][$esid])) {
+                    continue;
+                }
+
+                $archivedpairs[$esid][] = $ecid;
+                $archivedstudentids[$esid] = true;
+            }
+        }
+
         // ------------------------------------------------------------
         // Final Pass/Fail status per student+course pair, driven
         // entirely by block_nvq_matrix_status - the only reliable
@@ -572,6 +675,39 @@ if ($canviewall) {
     // fix, v26.5.6, and get_portfolio_links()). A student never truly
     // present on that course (no grade/sampling/comment/status ever
     // recorded there) is excluded, even if the topic is shared.
+    // Fetch, once, the topic(s) tying THIS student's evidence to each
+    // candidate course, and every course each of those topics is
+    // linked to - both needed for the evidence-only inclusion path
+    // below, batched into two queries rather than one per candidate.
+    $topicsbycourse = []; // courseid => [topicid, ...]
+    $topicrowsforstudent = $DB->get_records_sql("
+        SELECT DISTINCT dtm.topicid, ct.courseid
+          FROM {block_exacompcompuser_mm} mm
+          JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
+          JOIN {block_exacompcoutopi_mm} ct ON ct.topicid = dtm.topicid
+         WHERE mm.userid = :userid AND mm.eportfolioitem = 1
+    ", ['userid' => $studentid]);
+    foreach ($topicrowsforstudent as $trow) {
+        $topicsbycourse[(int) $trow->courseid][] = (int) $trow->topicid;
+    }
+    $alltopicidsforstudent = [];
+    foreach ($topicsbycourse as $tids) {
+        foreach ($tids as $tid) {
+            $alltopicidsforstudent[$tid] = true;
+        }
+    }
+    $topiclinkedcoursesforstudent = []; // topicid => [courseid, ...]
+    if (!empty($alltopicidsforstudent)) {
+        list($stidinsql, $stidparams) = $DB->get_in_or_equal(array_keys($alltopicidsforstudent), SQL_PARAMS_NAMED, 'stid');
+        $studentlinkrows = $DB->get_records_sql("
+            SELECT id, topicid, courseid FROM {block_exacompcoutopi_mm} WHERE topicid $stidinsql
+        ", $stidparams);
+        foreach ($studentlinkrows as $lrow) {
+            $topiclinkedcoursesforstudent[(int) $lrow->topicid][] = (int) $lrow->courseid;
+        }
+    }
+    $studentenrolledidsforstudent = array_keys(enrol_get_users_courses($studentid, true, ['id']));
+
     $realcourseids = [];
     foreach ($evidencecourseids as $ecid) {
         $haspresence = $DB->record_exists('block_nvq_matrix_grades', [
@@ -584,6 +720,31 @@ if ($canviewall) {
             'studentid' => $studentid, 'courseid' => $ecid,
         ]);
         if ($haspresence) {
+            $realcourseids[] = $ecid;
+            continue;
+        }
+
+        // REAL BUG FIXED HERE (v26.6.12): the plugin-table presence
+        // check above excludes a student who only ever uploaded
+        // evidence and was unenrolled before any grade/sampling/
+        // comment/status was ever recorded - confirmed live
+        // 2026-09-04. Include them too, but ONLY when the evidence
+        // unambiguously belongs to $ecid: none of the topics tying the
+        // student to $ecid may also be linked to a DIFFERENT course the
+        // student is genuinely, currently enrolled in - the same
+        // ambiguity the $haspresence check above exists to guard
+        // against in the first place.
+        $ecidtopics = $topicsbycourse[$ecid] ?? [];
+        $ambiguous = false;
+        foreach ($ecidtopics as $tid) {
+            foreach ($topiclinkedcoursesforstudent[$tid] ?? [] as $lcid) {
+                if ($lcid !== $ecid && in_array($lcid, $studentenrolledidsforstudent, true)) {
+                    $ambiguous = true;
+                    break 2;
+                }
+            }
+        }
+        if (!$ambiguous) {
             $realcourseids[] = $ecid;
         }
     }
