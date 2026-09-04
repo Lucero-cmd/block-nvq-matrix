@@ -201,6 +201,34 @@ class provider implements
             'privacy:metadata:block_nvq_matrix_unit_comments'
         );
 
+        // Real gap fixed here (v26.6.9 audit): this table has neither a
+        // studentid nor a courseid column of its own - just itemid
+        // (block_exaportitem.id) and timenotified. That made it easy to
+        // miss when block_nvq_matrix_assessor/cleared_archive were added
+        // to this provider in v26.6.3, since neither of THIS table's two
+        // columns looks like a personal-data field in isolation. It is
+        // one, though: itemid resolves (via block_exaportitem, which has
+        // its own direct userid + courseid columns - no join chain needed,
+        // unlike evidence_comments above) to the specific student whose
+        // evidence submission triggered a notification, and timenotified
+        // records exactly when that happened - i.e. this table is a
+        // record of a specific student's submission activity, same in
+        // kind as the "who/when" already covered for every other table
+        // here. No staff-author column exists on this table at all (it's
+        // system-generated bookkeeping for the notify_assessors_task
+        // scheduled task, see its own docblock) - only ever exported/
+        // deleted as the item-owning student's own data, never as
+        // "authored about someone else" the way grades/sampling/comments
+        // are.
+        $collection->add_database_table(
+            'block_nvq_matrix_notified_items',
+            [
+                'itemid'       => 'privacy:metadata:block_nvq_matrix_notified_items:itemid',
+                'timenotified' => 'privacy:metadata:block_nvq_matrix_notified_items:timenotified',
+            ],
+            'privacy:metadata:block_nvq_matrix_notified_items'
+        );
+
         return $collection;
     }
 
@@ -308,6 +336,22 @@ class provider implements
             'userid17'      => $userid,
         ]);
 
+        // Real gap fixed here (v26.6.9 audit) - see get_metadata() above.
+        // block_exaportitem has its own direct courseid + userid columns,
+        // so this needs only a single join, unlike evidence_comments'
+        // longer chain above.
+        $contextlist->add_from_sql("
+            SELECT ctx.id
+              FROM {context} ctx
+              JOIN {block_exaportitem} i ON i.courseid = ctx.instanceid
+              JOIN {block_nvq_matrix_notified_items} ni ON ni.itemid = i.id
+             WHERE ctx.contextlevel = :contextlevel8
+               AND i.userid = :userid18
+        ", [
+            'contextlevel8' => CONTEXT_COURSE,
+            'userid18'      => $userid,
+        ]);
+
         return $contextlist;
     }
 
@@ -399,6 +443,14 @@ class provider implements
         $userlist->add_from_sql('clearedby', "
             SELECT clearedby FROM {block_nvq_matrix_cleared_archive}
              WHERE courseid = :courseid AND clearedby IS NOT NULL
+        ", ['courseid' => $courseid]);
+
+        // Real gap fixed here (v26.6.9 audit) - see get_metadata() above.
+        $userlist->add_from_sql('studentid', "
+            SELECT i.userid
+              FROM {block_nvq_matrix_notified_items} ni
+              JOIN {block_exaportitem} i ON i.id = ni.itemid
+             WHERE i.courseid = :courseid
         ", ['courseid' => $courseid]);
     }
 
@@ -622,6 +674,30 @@ class provider implements
                 );
             }
 
+            // Real gap fixed here (v26.6.9 audit) - see get_metadata()
+            // above. No staff-author side to this one (system-generated
+            // bookkeeping, not authored content) - only ever exported as
+            // this user's own data, resolved via their own eportfolio
+            // items in this course.
+            $ownnotifieditems = $DB->get_records_sql("
+                SELECT ni.*
+                  FROM {block_nvq_matrix_notified_items} ni
+                  JOIN {block_exaportitem} i ON i.id = ni.itemid
+                 WHERE i.userid = :userid AND i.courseid = :courseid
+            ", ['userid' => $userid, 'courseid' => $courseid]);
+            if (!empty($ownnotifieditems)) {
+                $data = (object) ['notifieditems' => array_values(array_map(function ($ni) {
+                    return (object) [
+                        'itemid'       => $ni->itemid,
+                        'timenotified' => transform::datetime($ni->timenotified),
+                    ];
+                }, $ownnotifieditems))];
+                writer::with_context($context)->export_data(
+                    array_merge($subcontext, [get_string('tasknotifyassessors', 'block_nvq_matrix')]),
+                    $data
+                );
+            }
+
             if (!empty($authoredgrades) || !empty($authoredsampling) || !empty($authoredunitcomments) || !empty($authoredstatus)) {
                 $data = (object) [
                     'grades'   => array_values(array_map(function ($g) {
@@ -715,6 +791,14 @@ class provider implements
         $DB->delete_records('block_nvq_matrix_assessor', ['courseid' => $courseid]);
         $DB->delete_records('block_nvq_matrix_cleared_archive', ['courseid' => $courseid]);
 
+        // Real gap fixed here (v26.6.9 audit) - see get_metadata() above.
+        $DB->execute("
+            DELETE FROM {block_nvq_matrix_notified_items}
+             WHERE itemid IN (
+                SELECT i.id FROM {block_exaportitem} i WHERE i.courseid = :courseid
+             )
+        ", ['courseid' => $courseid]);
+
         $DB->execute("
             DELETE FROM {block_nvq_matrix_evidence_types}
              WHERE evidencecommentid IN (
@@ -791,6 +875,16 @@ class provider implements
                      WHERE ct.courseid = :courseid
                  )
             ", ['userid' => $userid, 'courseid' => $courseid]);
+
+            // Real gap fixed here (v26.6.9 audit) - see get_metadata() above.
+            $DB->execute("
+                DELETE FROM {block_nvq_matrix_notified_items}
+                 WHERE itemid IN (
+                    SELECT i.id
+                      FROM {block_exaportitem} i
+                     WHERE i.userid = :userid AND i.courseid = :courseid
+                 )
+            ", ['userid' => $userid, 'courseid' => $courseid]);
         }
     }
 
@@ -842,6 +936,16 @@ class provider implements
                       JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
                       JOIN {block_exacompcoutopi_mm} ct ON ct.topicid = dtm.topicid
                      WHERE ct.courseid = :courseid
+                 )
+            ", ['userid' => $userid, 'courseid' => $courseid]);
+
+            // Real gap fixed here (v26.6.9 audit) - see get_metadata() above.
+            $DB->execute("
+                DELETE FROM {block_nvq_matrix_notified_items}
+                 WHERE itemid IN (
+                    SELECT i.id
+                      FROM {block_exaportitem} i
+                     WHERE i.userid = :userid AND i.courseid = :courseid
                  )
             ", ['userid' => $userid, 'courseid' => $courseid]);
         }

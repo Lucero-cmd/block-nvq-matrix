@@ -1216,6 +1216,103 @@ class matrix_data {
     }
 
     /**
+     * Resolves the correct course for a specific eportfolio item submission,
+     * for use by notify_assessors_task before it calls
+     * notify_assessor_of_submission() below.
+     *
+     * REAL BUG FIXED HERE (v26.6.11): block_exaportitem.courseid - exaport's
+     * own denormalized column, set at item-link time, never written by this
+     * plugin - was found wrong for 62% of items site-wide in a live audit
+     * (187 of 303), stamped with courseid=1 (SITEID / the Front Page
+     * "course", which structurally can never have an NVQ assessor or
+     * competence topics) instead of the student's real course. Best
+     * explanation found: exaport records whatever $COURSE->id is active at
+     * link time, which defaults to SITEID when an item is linked from
+     * outside a specific course's own context (e.g. a generic "My
+     * ePortfolio" area rather than the course's own Competence Grid page) -
+     * not confirmed against exaport's own source, but consistent with every
+     * case checked live. notify_assessors_task previously trusted this
+     * column outright, so every submission linked this way silently failed
+     * to notify anyone: no error, just the normal "no assessor row for this
+     * course" no-op get_assessor() already returns for a genuinely
+     * unconfigured course - SITEID always hits that same no-op path,
+     * indistinguishable from the ordinary case.
+     *
+     * Mirrors the same enrolment-filtered topic-chain resolution
+     * get_portfolio_links() already uses, for the same underlying reason: a
+     * topic/competency CAN legitimately be linked to more than one course
+     * (confirmed live - though the client is actively giving each course
+     * its own independent competence set via a separate import/export tool,
+     * so this particular ambiguity should shrink over time rather than
+     * grow), so a topic link alone doesn't say which course a given
+     * student's submission actually belongs to - only which course(s) the
+     * student is actually enrolled in, intersected with the topic's real
+     * links, can answer that.
+     *
+     * Falls back to $fallbackcourseid (the raw, often-wrong item.courseid)
+     * only when resolution finds nothing better - this can genuinely
+     * happen (an item not yet linked to any competency, or linked to a
+     * topic not mapped to any course the student is enrolled in), and in
+     * that case the original value is still the best information
+     * available, wrong as it may often be.
+     *
+     * @param int $itemid The block_exaportitem.id being submitted.
+     * @param int $studentid The item's owner (block_exaportitem.userid).
+     * @param int $fallbackcourseid The raw item.courseid, used only if resolution finds nothing.
+     * @return int
+     */
+    public static function resolve_submission_courseid(int $itemid, int $studentid, int $fallbackcourseid): int {
+        global $DB;
+
+        $candidates = $DB->get_fieldset_sql("
+            SELECT DISTINCT ct.courseid
+              FROM {block_exacompcompuser_mm} mm
+              JOIN {block_exacompdescrtopic_mm} dtm ON dtm.descrid = mm.compid
+              JOIN {block_exacompcoutopi_mm} ct ON ct.topicid = dtm.topicid
+             WHERE mm.activityid = :itemid
+               AND mm.userid = :userid
+               AND mm.eportfolioitem = 1
+        ", ['itemid' => $itemid, 'userid' => $studentid]);
+
+        if (empty($candidates)) {
+            return $fallbackcourseid;
+        }
+
+        // Filter to courses this student is genuinely enrolled in - same
+        // protective filter get_portfolio_links() already applies, for the
+        // same reason: a topic being linked to a course says nothing about
+        // whether THIS student is actually on it.
+        $enrolledids = array_keys(enrol_get_users_courses($studentid, true, ['id']));
+        $validcandidates = array_values(array_intersect($candidates, $enrolledids));
+
+        if (empty($validcandidates)) {
+            return $fallbackcourseid;
+        }
+
+        if (count($validcandidates) === 1) {
+            return (int) $validcandidates[0];
+        }
+
+        // Still genuinely ambiguous (student enrolled in more than one
+        // course sharing this exact topic) - same deterministic "lowest
+        // courseid wins" tiebreak already used elsewhere in this plugin
+        // (matrix_data::build()'s $topiccourseidmap) purely for
+        // consistency with that established convention, even though it's
+        // already flagged elsewhere in this file as an imperfect
+        // tiebreak. Still a better bet than trusting item.courseid, which
+        // this whole method exists because of.
+        //
+        // Cast to int before sorting - $validcandidates holds raw DB
+        // fieldset values (strings), and while PHP's default sort()
+        // usually numeric-sorts numeric-looking strings correctly, that's
+        // not guaranteed behaviour to lean on for a tiebreak that needs to
+        // be deterministic.
+        $validcandidates = array_map('intval', $validcandidates);
+        sort($validcandidates);
+        return (int) $validcandidates[0];
+    }
+
+    /**
      * Notifies a course's designated Assessor that a student has
      * submitted evidence. Called from
      * classes/task/notify_assessors_task.php, which polls

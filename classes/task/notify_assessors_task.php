@@ -171,10 +171,33 @@ class notify_assessors_task extends \core\task\scheduled_task {
             }
 
             $item = $DB->get_record('block_exaportitem', ['id' => $activityid], 'id, courseid, userid', IGNORE_MISSING);
-            if (!$item || !$item->courseid) {
-                // Item since deleted, or a courseid of 0 (a
-                // pre-course-linking legacy item) - nothing sensible to
-                // notify about.
+            if (!$item) {
+                // Item since deleted - nothing sensible to notify about.
+                continue;
+            }
+
+            // REAL BUG FIXED HERE (v26.6.11): item.courseid - exaport's own
+            // denormalized column - was found wrong for 62% of items
+            // site-wide in a live audit (187 of 303), stamped with
+            // courseid=1 (SITEID/Front Page) instead of the student's real
+            // course. Every submission linked this way previously failed
+            // to notify anyone, silently - the resulting "no assessor for
+            // SITEID" no-op is indistinguishable from a genuinely
+            // unconfigured course, so this went unnoticed until directly
+            // audited. See matrix_data::resolve_submission_courseid()'s own
+            // docblock for the full explanation and the enrolment-filtered
+            // topic-chain resolution used to correct it, mirroring the same
+            // pattern get_portfolio_links() already uses for the identical
+            // underlying reason.
+            $courseid = \block_nvq_matrix\matrix_data::resolve_submission_courseid(
+                $activityid,
+                (int) $item->userid,
+                (int) $item->courseid
+            );
+            if (!$courseid) {
+                // Resolution found nothing better AND the raw item.courseid
+                // was itself 0 (a pre-course-linking legacy item) - nothing
+                // sensible to notify about, same as the original guard here.
                 continue;
             }
 
@@ -184,7 +207,7 @@ class notify_assessors_task extends \core\task\scheduled_task {
             // item.php, but the item's owner is the more semantically
             // correct source of truth for "who submitted this".
             \block_nvq_matrix\matrix_data::notify_assessor_of_submission(
-                (int) $item->courseid,
+                $courseid,
                 (int) $item->userid,
                 $activityid
             );

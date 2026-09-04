@@ -766,5 +766,28 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026090100, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026090200) {
+        // No schema/capability change - release-string/version bump
+        // only (block_nvq_matrix_notified_items added to
+        // classes/privacy/provider.php, see version.php).
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026090200, 'nvq_matrix');
+    }
+
+    if ($oldversion < 2026090300) {
+        // No schema/capability change - release-string/version bump
+        // only. Fixes notify_assessors_task's course resolution (see
+        // matrix_data::resolve_submission_courseid() and version.php's
+        // own changelog for the full explanation). Purely a code
+        // change - no data migration here, since a blanket
+        // reprocessing of every historical submission would re-notify
+        // about things long since handled manually. See version.php's
+        // v26.6.11 entry for the separate backfill this does NOT do.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026090300, 'nvq_matrix');
+    }
     return true;
 }

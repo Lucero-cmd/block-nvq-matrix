@@ -17,6 +17,47 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.11 (1.20.11) — REAL BUG: assessor-submission notifications were
+ *   silently failing for the majority of eportfolio items site-wide.
+ *   notify_assessors_task trusted block_exaportitem.courseid outright
+ *   to decide which course's assessor to notify - a live audit
+ *   (2026-09-04, prompted by a client report of zero notifications
+ *   despite multiple real submissions) found that column wrong for 187
+ *   of 303 items site-wide (62%), stamped with courseid=1 (SITEID/Front
+ *   Page - a "course" that structurally can never have an NVQ assessor
+ *   or competence topics) instead of the student's real course. Every
+ *   affected submission's assessor lookup silently no-op'd - identical
+ *   in behaviour to a genuinely unconfigured course, so this went
+ *   unnoticed. New matrix_data::resolve_submission_courseid() mirrors
+ *   the enrolment-filtered topic-chain resolution get_portfolio_links()
+ *   already uses, falling back to the raw item.courseid only when
+ *   nothing better resolves. No schema change.
+ *
+ *   IMPORTANT - this fix is forward-looking only: notify_assessors_task
+ *   advances its watermark (assessor_notify_lastid) past every row it
+ *   sees regardless of whether a notification actually fired, so
+ *   submissions already processed before this fix landed will NOT be
+ *   retroactively notified just by deploying this. A separate one-off
+ *   backfill script is needed to identify and manually re-trigger
+ *   notify_assessor_of_submission() for the specific items affected -
+ *   not run as part of this upgrade, since a blanket watermark reset
+ *   would re-notify about every historical submission site-wide, not
+ *   just the affected ones.
+ *
+ * v26.6.10 (1.20.10) — block_nvq_matrix_notified_items added to
+ *   classes/privacy/provider.php - a real gap, same category as the
+ *   block_nvq_matrix_assessor/cleared_archive gap fixed in v26.6.3, just
+ *   not caught at the time because this table has neither a studentid
+ *   nor a courseid column of its own (only itemid + timenotified), so
+ *   neither field looks like personal data in isolation. It is one
+ *   though: itemid resolves via block_exaportitem (which has its own
+ *   direct userid + courseid columns) to the specific student whose
+ *   submission triggered a notification. Added to get_metadata(),
+ *   get_contexts_for_userid(), get_users_in_context(),
+ *   export_user_data() (as the item-owning student's own data - this
+ *   table has no staff-author column, unlike every other table this
+ *   provider covers), and all three delete methods. No schema change.
+ *
  * v26.6.9 (1.20.9) — Real fix for the Company Manager CAP_PREVENT on
  *   block/nvq_matrix:deletearchived that 1.20.6/1.20.7/1.20.8 each
  *   attempted and each silently no-op'd. Investigated live on both
@@ -2313,7 +2354,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026090100;
+$plugin->version   = 2026090300;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2328,4 +2369,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.9';
+$plugin->release   = '1.20.11';
