@@ -925,5 +925,29 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026090500, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026090600) {
+        // No schema/capability change - release-string/version bump
+        // only. Fixes view.php's evidence-only archived-detection path
+        // (v26.6.12) to respect block_nvq_matrix_cleared_archive, so a
+        // deleted evidence-only student's archived entry no longer
+        // immediately reappears - see version.php's v26.6.14 entry for
+        // the full explanation.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026090600, 'nvq_matrix');
+    }
+
+    if ($oldversion < 2026090700) {
+        // No schema/capability change - release-string/version bump
+        // only. Fixes view.php's evidence-only archived-detection
+        // ambiguity guard to resolve mutual ambiguity between candidates
+        // using the audit trail (v26.6.13), suppressing rather than
+        // guessing when unresolvable - see version.php's v26.6.15 entry
+        // for the full explanation.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026090700, 'nvq_matrix');
+    }
     return true;
 }

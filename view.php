@@ -431,6 +431,29 @@ if ($canviewall) {
         }
         $evidencetopicrows->close();
 
+        // REAL BUG FIXED HERE (v26.6.14): the check above ("already found
+        // via a plugin-table presence row") is not the same thing as "was
+        // explicitly deleted via the Delete button". A student with real
+        // plugin-table rows self-resolves after deletion, since deleting
+        // those rows removes the very thing the presence-row loop above
+        // detects them by - no separate check was ever needed there. An
+        // evidence-only student is different: delete_archived.php can
+        // never touch the underlying exacomp/exaport evidence (this
+        // plugin's own long-standing rule, never violated), so without
+        // this check this evidence-only path would re-derive "archived"
+        // forever, immediately undoing every delete. Confirmed live on
+        // staging (2026-09-04): an evidence-only student's archived entry
+        // was deleted, and reappeared on the very next page load.
+        list($clcidinsql, $clcidparams) = $DB->get_in_or_equal($courseidlist, SQL_PARAMS_NAMED, 'clcide');
+        $clearedpairsrs = $DB->get_recordset_sql("
+            SELECT studentid, courseid FROM {block_nvq_matrix_cleared_archive} WHERE courseid $clcidinsql
+        ", $clcidparams);
+        $clearedpairs = []; // sid => [cid => true]
+        foreach ($clearedpairsrs as $crow) {
+            $clearedpairs[(int) $crow->studentid][(int) $crow->courseid] = true;
+        }
+        $clearedpairsrs->close();
+
         // Every course each relevant topic is linked to (not just the
         // viewall-scoped courses) - batched in one query rather than
         // one per candidate, matching this file's own established
@@ -449,6 +472,17 @@ if ($canviewall) {
 
         $studentenrolledidscache = []; // sid => [courseid => true], fetched once per distinct student.
         foreach ($evidencebystudentcourse as $esid => $coursetopics) {
+            if (!isset($studentenrolledidscache[$esid])) {
+                $studentenrolledidscache[$esid] = array_flip(array_keys(
+                    enrol_get_users_courses($esid, true, ['id'])
+                ));
+            }
+
+            // Pass 1: same enrolment-ambiguity exclusion as before - a
+            // candidate whose topic is ALSO linked to a course this
+            // student is genuinely, currently enrolled in is explained by
+            // that real enrolment, not by this candidate.
+            $survivingcandidates = []; // ecid => topicids
             foreach ($coursetopics as $ecid => $topicids) {
                 if (in_array($ecid, $trueenrolledcourseids[$esid] ?? [], true)) {
                     continue; // currently enrolled there, not archived.
@@ -456,26 +490,98 @@ if ($canviewall) {
                 if (isset($archivedpairs[$esid]) && in_array($ecid, $archivedpairs[$esid], true)) {
                     continue; // already found via a plugin-table presence row above.
                 }
-
-                if (!isset($studentenrolledidscache[$esid])) {
-                    $studentenrolledidscache[$esid] = array_flip(array_keys(
-                        enrol_get_users_courses($esid, true, ['id'])
-                    ));
+                if (isset($clearedpairs[$esid][$ecid])) {
+                    continue; // explicitly deleted via the Delete button.
                 }
 
-                $ambiguous = false;
+                $enrolledambiguous = false;
                 foreach ($topicids as $tid) {
                     foreach ($topiclinkedcourses[$tid] ?? [] as $lcid) {
                         if ($lcid !== $ecid && isset($studentenrolledidscache[$esid][$lcid])) {
-                            $ambiguous = true;
+                            $enrolledambiguous = true;
                             break 2;
                         }
                     }
                 }
-                if ($ambiguous) {
+                if ($enrolledambiguous) {
                     continue;
                 }
 
+                $survivingcandidates[$ecid] = $topicids;
+            }
+
+            if (empty($survivingcandidates)) {
+                continue;
+            }
+
+            // Pass 2: for each survivor, determine its full ambiguity
+            // group - every course ANY of its topics is also linked to,
+            // via $topiclinkedcourses, regardless of whether that other
+            // course happens to still be in $survivingcandidates. This
+            // matters because a sibling course can be excluded from
+            // survivingcandidates for reasons that say nothing about
+            // whether IT was the real one - e.g. explicitly deleted via
+            // cleared_archive - and its own history (still on record
+            // regardless of that deletion) remains real evidence for
+            // resolving a sibling's ambiguity. Checking against
+            // survivingcandidates alone would let a candidate become
+            // "unambiguous by elimination" the moment its true sibling
+            // gets excluded for an unrelated administrative reason,
+            // exactly the failure mode this fix exists for.
+            $finalcandidates = [];
+            foreach ($ecids = array_keys($survivingcandidates) as $ecid) {
+                $group = [$ecid => true];
+                foreach ($survivingcandidates[$ecid] as $tid) {
+                    foreach ($topiclinkedcourses[$tid] ?? [] as $lcid) {
+                        $group[$lcid] = true;
+                    }
+                }
+
+                if (count($group) === 1) {
+                    // No sharing at all - genuinely unique, include directly.
+                    $finalcandidates[] = $ecid;
+                    continue;
+                }
+
+                // REAL BUG FIXED HERE (v26.6.15): the enrolment-ambiguity
+                // check above only rules out a candidate explained by a
+                // CURRENT enrolment - it says nothing about two
+                // candidates ambiguous with EACH OTHER while the student
+                // is enrolled nowhere at all (fully unenrolled, evidence
+                // still shared between courses). Every survivor used to
+                // be added unconditionally, which meant a student in that
+                // exact state showed as archived on EVERY course sharing
+                // the topic bank at once. Confirmed live on staging
+                // (2026-09-04, still pre-topic-separation there).
+                //
+                // Genuinely ambiguous - use the audit trail (v26.6.13) as
+                // real evidence to break the tie across the WHOLE group,
+                // not just this candidate: a course with genuine prior
+                // grade/sampling/comment/status history is a real signal
+                // of which course a student actually belonged to, unlike
+                // a guess. Only include THIS candidate if it is the one
+                // and only course in the group with history. If history
+                // points to none, or to more than one, or to a different
+                // course in the group than this one, don't guess -
+                // exclude this candidate. A missing archived entry
+                // needing manual follow-up is a far smaller problem than
+                // a confidently wrong one.
+                $withhistory = [];
+                foreach (array_keys($group) as $gcid) {
+                    $hashistory = $DB->record_exists('block_nvq_matrix_grades_history', ['studentid' => $esid, 'courseid' => $gcid])
+                        || $DB->record_exists('block_nvq_matrix_sampling_history', ['studentid' => $esid, 'courseid' => $gcid])
+                        || $DB->record_exists('block_nvq_matrix_unit_comments_history', ['studentid' => $esid, 'courseid' => $gcid])
+                        || $DB->record_exists('block_nvq_matrix_status_history', ['studentid' => $esid, 'courseid' => $gcid]);
+                    if ($hashistory) {
+                        $withhistory[] = $gcid;
+                    }
+                }
+                if (count($withhistory) === 1 && $withhistory[0] === $ecid) {
+                    $finalcandidates[] = $ecid;
+                }
+            }
+
+            foreach ($finalcandidates as $ecid) {
                 // Same three exclusion checks the presence-row loop
                 // above already applies - re-run identically here since
                 // this is a separate candidate source.

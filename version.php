@@ -17,6 +17,61 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.15 (1.20.15) — REAL BUG: the v26.6.12 evidence-only archived-
+ *   detection path's ambiguity guard only excluded a candidate course
+ *   explained by a CURRENT enrolment - it said nothing about two
+ *   candidates ambiguous with EACH OTHER while the student is enrolled
+ *   nowhere at all. A student fully unenrolled (from every course) while
+ *   evidence remained on a shared topic bank showed as archived on EVERY
+ *   course sharing that bank at once, not just the one they were really
+ *   on. Confirmed live on staging (2026-09-04, still pre-topic-separation
+ *   there): an unenrolled student showed as archived on two courses
+ *   simultaneously.
+ *
+ *   Fixed by determining each candidate's full ambiguity group (every
+ *   course any of its topics is also linked to, regardless of whether
+ *   that sibling course happens to still be a live candidate itself -
+ *   deliberately checked against the full topic-sharing relationship,
+ *   not just the surviving candidate set, so a sibling excluded for an
+ *   unrelated reason like v26.6.14's cleared_archive check can't make
+ *   this one look falsely unambiguous "by elimination"), then using the
+ *   audit trail (v26.6.13) as real evidence to break the tie: a course
+ *   in the group with genuine prior grade/sampling/comment/status
+ *   history is a real signal of which course the student actually
+ *   belonged to. A candidate is only included if it is the one and only
+ *   course in its group with history. If history points to none, or to
+ *   more than one course, or to a different course than the candidate
+ *   itself, the candidate is excluded rather than guessed at - a missing
+ *   archived entry needing manual follow-up is a far smaller problem
+ *   than a confidently wrong one. No schema change.
+ *
+ * v26.6.14 (1.20.14) — REAL BUG: the v26.6.12 evidence-only archived-
+ *   detection path (teacher-side "Show archived" list) never checked
+ *   block_nvq_matrix_cleared_archive, so deleting an evidence-only
+ *   student's archived entry via the Delete button had no lasting
+ *   effect - they reappeared on the very next page load. Confirmed live
+ *   on staging (2026-09-04) during audit-trail feature testing: a
+ *   student's archived entry was deleted, and immediately came back.
+ *
+ *   Root cause: a student with real plugin-table rows (the ORIGINAL,
+ *   pre-v26.6.12 presence-row detection path) self-resolves after
+ *   deletion, because delete_archived.php genuinely removes those rows -
+ *   the very thing that path detects them by - so no separate
+ *   cleared_archive check was ever needed there, and still isn't. An
+ *   evidence-only student is fundamentally different: their "archived"
+ *   status comes from raw exacomp/exaport evidence, which
+ *   delete_archived.php can never touch (this plugin's own long-standing
+ *   rule around third-party data, never violated) - so without an
+ *   explicit check, that evidence keeps re-deriving "archived" forever,
+ *   immediately undoing every delete for exactly the population v26.6.12
+ *   was built to help in the first place.
+ *
+ *   Fixed by checking block_nvq_matrix_cleared_archive inside the
+ *   evidence-only loop specifically (not the original presence-row loop,
+ *   which doesn't need it) - the same signal delete_archived.php already
+ *   writes on every successful delete, previously only ever read by the
+ *   student's own archived-course switcher. No schema change.
+ *
  * v26.6.13 (1.20.13) — NEW FEATURE: audit trail for grades, sampling,
  *   unit comments, and final status. Real gap identified in a full-plugin
  *   audit (2026-09-04): every save_*()/clear_*() method in matrix_data.php
@@ -2442,7 +2497,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026090500;
+$plugin->version   = 2026090700;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2457,4 +2512,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.13';
+$plugin->release   = '1.20.15';
