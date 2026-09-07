@@ -17,6 +17,28 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.22 (1.20.22) — REAL BUG: save_grade()'s timemodified was
+ *   hardcoded to the real current time unconditionally, in both its
+ *   update and insert branches, regardless of any backdated
+ *   $commentdate submitted - only commenttime (the comment's own
+ *   attribution) ever actually followed the entered date. This was
+ *   invisible before the History feature (v26.6.16) existed, since
+ *   nothing displayed timemodified directly, but
+ *   matrix_data::get_unit_history() reads gradedby/timemodified for
+ *   its "set by" line - so a deliberately backdated grade's History
+ *   entry always showed the real save time instead of the date
+ *   actually entered, directly contradicting v26.6.21's own
+ *   simplification (confirmed live on staging 2026-09-08, traced via
+ *   direct database inspection: entering "13/01/2026" left the live
+ *   row's timemodified at the real save timestamp while commenttime
+ *   correctly showed the entered date - the two fields silently
+ *   diverging on every backdated save).
+ *
+ *   Fixed: timemodified now follows $commentdate exactly like
+ *   commenttime already did, in both branches. One entered date now
+ *   governs the whole row - the verdict and its comment can no longer
+ *   silently disagree about when they were set. No schema change.
+ *
  * v26.6.21 (1.20.21) — Client decision (2026-09-08): the backdatable
  *   audit-trail mechanism built across v26.6.17-20 (a settings-page
  *   "Migration mode" toggle, a per-entry checkbox, capability gating
@@ -2679,7 +2701,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026091300;
+$plugin->version   = 2026091400;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2694,4 +2716,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.21';
+$plugin->release   = '1.20.22';

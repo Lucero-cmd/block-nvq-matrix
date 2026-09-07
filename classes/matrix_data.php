@@ -1653,6 +1653,20 @@ class matrix_data {
     ): void {
         global $DB, $USER;
 
+        // REAL BUG FIXED HERE (v26.6.22): timemodified used to be
+        // hardcoded to $now unconditionally, in both branches below,
+        // regardless of $commentdate - the only backdatable field on
+        // this table was commenttime (the comment's own attribution),
+        // never timemodified (the verdict's own timestamp). This was
+        // invisible before the History feature existed, since nothing
+        // displayed timemodified directly - but get_unit_history()
+        // reads gradedby/timemodified for its "set by" line, so a
+        // backdated grade's history entry always showed the real save
+        // time instead of the entered date. Confirmed live on staging
+        // (2026-09-08). Now follows $commentdate exactly like
+        // commenttime already does - one entered date governs the
+        // whole row, not two independently-tracked timestamps that can
+        // silently diverge.
         $now     = time();
         $trimmed = trim($comment);
 
@@ -1681,7 +1695,7 @@ class matrix_data {
             ], self::resolve_archivedtime($commentdate));
             $existing->value        = $value;
             $existing->gradedby     = $USER->id;
-            $existing->timemodified = $now;
+            $existing->timemodified = $commentdate > 0 ? $commentdate : $now;
             foreach ($commentfields as $field => $fieldvalue) {
                 $existing->$field = $fieldvalue;
             }
@@ -1693,7 +1707,7 @@ class matrix_data {
                 'courseid'     => $courseid,
                 'value'        => $value,
                 'gradedby'     => $USER->id,
-                'timemodified' => $now,
+                'timemodified' => $commentdate > 0 ? $commentdate : $now,
             ], $commentfields));
         }
     }
