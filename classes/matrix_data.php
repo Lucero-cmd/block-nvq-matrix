@@ -1055,8 +1055,55 @@ class matrix_data {
      *                            submitted.
      * @return int The archivedtime to use.
      */
-    private static function resolve_archivedtime(int $courseid, int $submitteddate): int {
-        if ($submitteddate <= 0 || !get_config('block_nvq_matrix', 'migrationmode')) {
+    /**
+     * Decides what archivedtime a history snapshot should actually use
+     * for this particular save action - either the genuine, real,
+     * untamperable current time (the default, and the only behaviour
+     * when neither trigger below applies), or the SAME backdated date
+     * already being submitted for this save's own timemodified/
+     * commenttime, triggered by EITHER of two independent things:
+     *
+     *   1. "Migration mode" (settings.php) switched on site-wide -
+     *      intended for a bulk migration window, so every backdated
+     *      entry during that window is treated the same way without
+     *      needing anything extra per-save.
+     *   2. $explicitrequest - a per-save checkbox ("Also backdate the
+     *      audit trail to this date"), added v26.6.20 specifically
+     *      because a persistent site-wide setting is easy to
+     *      accidentally leave switched on, silently weakening every
+     *      ordinary backdated entry made afterward with no visible
+     *      reminder it's still active. The checkbox has no lingering
+     *      state at all - it's a fresh, explicit choice on every single
+     *      save, made right at the point of entering historical data.
+     *
+     * Either trigger is gated identically: the person saving must hold
+     * block/nvq_matrix:grade in this course (editingteacher/manager -
+     * the Assessor archetype on this site) or be a genuine site admin -
+     * never the 'teacher' archetype (IQA/EQA on this site). Client
+     * decision (2026-09-08): migration/backdating concerns grade data,
+     * entered by Assessors, not IQA/EQA reviewers.
+     *
+     * archivedtime remains permanently non-backdatable for anyone when
+     * neither trigger applies - this is the plugin's normal, trustworthy
+     * state, and is what a plain assessor backdating an ORDINARY comment
+     * (unrelated to migration, with the checkbox left unticked) still
+     * gets, exactly as before v26.6.17.
+     *
+     * @param int $courseid
+     * @param int $submitteddate A parsed backdated date (from
+     *                            parse_comment_date()), or 0 if none was
+     *                            submitted.
+     * @param bool $explicitrequest Whether this specific save explicitly
+     *                               asked to backdate the audit trail too.
+     * @return int The archivedtime to use.
+     */
+    private static function resolve_archivedtime(int $courseid, int $submitteddate, bool $explicitrequest = false): int {
+        if ($submitteddate <= 0) {
+            return time();
+        }
+
+        $migrationmodeon = (bool) get_config('block_nvq_matrix', 'migrationmode');
+        if (!$migrationmodeon && !$explicitrequest) {
             return time();
         }
 
@@ -1147,7 +1194,7 @@ class matrix_data {
         }
     }
 
-    public static function save_final_status(int $studentid, int $courseid, int $status, int $setdate = 0): void {
+    public static function save_final_status(int $studentid, int $courseid, int $status, int $setdate = 0, bool $backdateaudit = false): void {
         global $DB, $USER;
 
         $now         = time();
@@ -1161,7 +1208,7 @@ class matrix_data {
         if ($existing) {
             self::snapshot_history('block_nvq_matrix_status_history', $existing, [
                 'studentid', 'courseid', 'status', 'setby', 'timemodified', 'notifiedtime', 'notifiedby',
-            ], self::resolve_archivedtime($courseid, $setdate));
+            ], self::resolve_archivedtime($courseid, $setdate, $backdateaudit));
             $existing->status       = $status;
             $existing->setby        = $USER->id;
             $existing->timemodified = $timemodified;
@@ -1673,7 +1720,8 @@ class matrix_data {
         int    $courseid,
         int    $value,
         string $comment = '',
-        int    $commentdate = 0
+        int    $commentdate = 0,
+        bool   $backdateaudit = false
     ): void {
         global $DB, $USER;
 
@@ -1702,7 +1750,7 @@ class matrix_data {
             self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
                 'studentid', 'topicid', 'courseid', 'value', 'comment',
                 'gradedby', 'timemodified', 'commentedby', 'commenttime',
-            ], self::resolve_archivedtime($courseid, $commentdate));
+            ], self::resolve_archivedtime($courseid, $commentdate, $backdateaudit));
             $existing->value        = $value;
             $existing->gradedby     = $USER->id;
             $existing->timemodified = $now;
@@ -1749,7 +1797,8 @@ class matrix_data {
         int    $studentid,
         int    $courseid,
         string $comment,
-        int    $commentdate = 0
+        int    $commentdate = 0,
+        bool   $backdateaudit = false
     ): void {
         global $DB, $USER;
 
@@ -1774,7 +1823,7 @@ class matrix_data {
             self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
                 'studentid', 'topicid', 'courseid', 'value', 'comment',
                 'gradedby', 'timemodified', 'commentedby', 'commenttime',
-            ], self::resolve_archivedtime($courseid, $commentdate));
+            ], self::resolve_archivedtime($courseid, $commentdate, $backdateaudit));
             foreach ($commentfields as $field => $fieldvalue) {
                 $existing->$field = $fieldvalue;
             }
@@ -1856,7 +1905,8 @@ class matrix_data {
         int $studentid,
         int $courseid,
         int $status,
-        int $sampledate = 0
+        int $sampledate = 0,
+        bool $backdateaudit = false
     ): void {
         global $DB, $USER;
 
@@ -1872,7 +1922,7 @@ class matrix_data {
         if ($existing) {
             self::snapshot_history('block_nvq_matrix_sampling_history', $existing, [
                 'studentid', 'topicid', 'courseid', 'status', 'sampledby', 'timemodified',
-            ], self::resolve_archivedtime($courseid, $sampledate));
+            ], self::resolve_archivedtime($courseid, $sampledate, $backdateaudit));
             $existing->status       = $status;
             $existing->timemodified = $timemodified;
             $existing->sampledby    = $USER->id;
@@ -1960,7 +2010,8 @@ class matrix_data {
         int    $studentid,
         int    $courseid,
         string $comment,
-        int    $commentdate = 0
+        int    $commentdate = 0,
+        bool   $backdateaudit = false
     ): void {
         global $DB, $USER;
 
@@ -1995,7 +2046,7 @@ class matrix_data {
                 'studentid', 'topicid', 'courseid',
                 'assessorcomment', 'assessorcommentby', 'assessorcommenttime',
                 'iqacomment', 'iqacommentby', 'iqacommenttime',
-            ], self::resolve_archivedtime($courseid, $commentdate));
+            ], self::resolve_archivedtime($courseid, $commentdate, $backdateaudit));
             foreach ($fields as $field => $value) {
                 $existing->$field = $value;
             }

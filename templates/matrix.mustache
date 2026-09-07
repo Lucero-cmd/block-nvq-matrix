@@ -445,6 +445,12 @@
                                value="{{gradecommentdateiso}}"
                                title="{{#str}}commentdatehelp, block_nvq_matrix{{/str}}">
                     </div>
+                    <div class="nvq-backdate-audit-wrap mt-1">
+                        <label class="nvq-backdate-audit-label" title="{{#str}}backdateaudithelp, block_nvq_matrix{{/str}}">
+                            <input type="checkbox" class="nvq-backdate-audit-checkbox nvq-grade-backdateaudit">
+                            {{#str}}backdateaudit, block_nvq_matrix{{/str}}
+                        </label>
+                    </div>
                     {{#hasgradecomment}}
                     {{#gradecommentbyname}}
                     <div class="nvq-comment-byline mt-1">{{#str}}commentedbyprefix, block_nvq_matrix, {{gradecommentbyname}}{{/str}}</div>
@@ -518,6 +524,12 @@
                                value="{{sampledateiso}}"
                                title="{{#str}}sampledatehelp, block_nvq_matrix{{/str}}">
                     </div>
+                    <div class="nvq-backdate-audit-wrap mt-1">
+                        <label class="nvq-backdate-audit-label" title="{{#str}}backdateaudithelp, block_nvq_matrix{{/str}}">
+                            <input type="checkbox" class="nvq-backdate-audit-checkbox nvq-sample-backdateaudit">
+                            {{#str}}backdateaudit, block_nvq_matrix{{/str}}
+                        </label>
+                    </div>
                     <div class="nvq-sample-status mt-1" aria-live="polite"></div>
                 </div>
                 {{/cansample}}
@@ -562,6 +574,22 @@
                                value="{{iqacommentdateiso}}"
                                title="{{#str}}commentdatehelp, block_nvq_matrix{{/str}}">
                     </div>
+                    {{! This section (caniqacomment) also renders for the
+                        plain 'teacher' archetype (IQA/EQA on this site),
+                        who the checkbox below would do nothing for -
+                        matrix_data::resolve_archivedtime() only honours
+                        it for block/nvq_matrix:grade holders or a site
+                        admin. Gated on cangrade (already available at
+                        top-level, reused here) so it's only ever shown
+                        to someone it would actually work for. }}
+                    {{#cangrade}}
+                    <div class="nvq-backdate-audit-wrap mt-1">
+                        <label class="nvq-backdate-audit-label" title="{{#str}}backdateaudithelp, block_nvq_matrix{{/str}}">
+                            <input type="checkbox" class="nvq-backdate-audit-checkbox nvq-unitcomment-backdateaudit">
+                            {{#str}}backdateaudit, block_nvq_matrix{{/str}}
+                        </label>
+                    </div>
+                    {{/cangrade}}
                     <div class="nvq-unit-comment-status mt-1" aria-live="polite"></div>
                 </div>
                 {{/caniqacomment}}
@@ -671,6 +699,12 @@
                 <input type="date" class="nvq-comment-date-input nvq-finalstatus-setdate form-control form-control-sm"
                        value="{{setdateiso}}"
                        title="{{#str}}statusdatehelp, block_nvq_matrix{{/str}}">
+            </div>
+            <div class="nvq-backdate-audit-wrap mt-1 nvq-finalstatus-editrow">
+                <label class="nvq-backdate-audit-label" title="{{#str}}backdateaudithelp, block_nvq_matrix{{/str}}">
+                    <input type="checkbox" class="nvq-backdate-audit-checkbox nvq-finalstatus-backdateaudit">
+                    {{#str}}backdateaudit, block_nvq_matrix{{/str}}
+                </label>
             </div>
             {{/canfinalstatus}}
 
@@ -1555,6 +1589,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         var value      = parseInt(activeBtn.dataset.value, 10);
         var comment    = (summary.querySelector('.nvq-grade-comment') || {}).value || '';
         var commentdate = (summary.querySelector('.nvq-grade-commentdate') || {}).value || '';
+        var backdateaudit = (summary.querySelector('.nvq-grade-backdateaudit') || {}).checked ? 1 : 0;
         var topicid    = parseInt(summary.dataset.topicid, 10);
         var studentid  = parseInt(summary.dataset.studentid, 10);
         var courseid   = parseInt(summary.dataset.courseid, 10);
@@ -1580,6 +1615,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
             value     : value,
             comment   : comment,
             commentdate : commentdate,
+            backdateaudit : backdateaudit,
             sesskey   : sesskey,
         });
 
@@ -1628,6 +1664,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
     function saveGradeCommentOnly(summary) {
         var comment      = (summary.querySelector('.nvq-grade-comment') || {}).value || '';
         var commentdate  = (summary.querySelector('.nvq-grade-commentdate') || {}).value || '';
+        var backdateaudit = (summary.querySelector('.nvq-grade-backdateaudit') || {}).checked ? 1 : 0;
         var topicid      = parseInt(summary.dataset.topicid, 10);
         var studentid    = parseInt(summary.dataset.studentid, 10);
         var courseid     = parseInt(summary.dataset.courseid, 10);
@@ -1653,6 +1690,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
             action      : 'comment',
             comment     : comment,
             commentdate : commentdate,
+            backdateaudit : backdateaudit,
             sesskey     : sesskey,
         });
 
@@ -1939,6 +1977,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         var comment   = textarea.value || '';
         var commentdateinput = summary.querySelector('.nvq-unit-commentdate');
         var commentdate = commentdateinput ? (commentdateinput.value || '') : '';
+        var backdateaudit = (summary.querySelector('.nvq-unitcomment-backdateaudit') || {}).checked ? 1 : 0;
         var statusEl  = summary.querySelector('.nvq-unit-comment-status');
 
         var matrix        = summary.closest('.block-nvq-matrix');
@@ -1960,6 +1999,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
             courseid  : courseid,
             comment   : comment,
             commentdate : commentdate,
+            backdateaudit : backdateaudit,
             sesskey   : sesskey,
         });
 
@@ -2011,6 +2051,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         var statusEl   = box.querySelector('.nvq-finalstatus-status');
         var dateinput  = box.querySelector('.nvq-finalstatus-setdate');
         var setdate    = dateinput ? (dateinput.value || '') : '';
+        var backdateaudit = (box.querySelector('.nvq-finalstatus-backdateaudit') || {}).checked ? 1 : 0;
 
         if (!url || !courseid || !studentid) { return; }
 
@@ -2030,6 +2071,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
             action    : 'set',
             status    : status,
             setdate   : setdate,
+            backdateaudit : backdateaudit,
             sesskey   : sesskey,
         });
 
@@ -2299,6 +2341,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         var courseid   = parseInt(summary.dataset.courseid, 10);
         var status     = parseInt(select.value, 10);
         var sampledate = dateinput ? (dateinput.value || '') : '';
+        var backdateaudit = (summary.querySelector('.nvq-sample-backdateaudit') || {}).checked ? 1 : 0;
         var statusEl   = summary.querySelector('.nvq-sample-status');
 
         var matrix     = summary.closest('.block-nvq-matrix');
@@ -2321,6 +2364,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
             courseid   : courseid,
             status     : status,
             sampledate : sampledate,
+            backdateaudit : backdateaudit,
             sesskey    : sesskey,
         });
 

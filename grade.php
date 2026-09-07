@@ -71,6 +71,12 @@ $action    = optional_param('action', 'set', PARAM_ALPHA);
 $value     = optional_param('value', 0, PARAM_INT);
 $comment   = optional_param('comment', '', PARAM_TEXT);
 $commentdatestr = optional_param('commentdate', '', PARAM_TEXT);
+// Per-entry checkbox (v26.6.20) - "Also backdate the audit trail to
+// this date too", alongside settings.php's site-wide Migration mode.
+// Either can trigger matrix_data::resolve_archivedtime()'s backdating -
+// see that method's own docblock for the full explanation of why both
+// exist. Ignored entirely if no commentdate was actually submitted.
+$backdateaudit = optional_param('backdateaudit', 0, PARAM_BOOL);
 
 $isclear  = ($action === 'clear');
 $iscommentonly = ($action === 'comment');
@@ -163,14 +169,14 @@ try {
         $response['message'] = get_string('gradecleared', 'block_nvq_matrix');
         $response['cleared'] = true;
     } else if ($iscommentonly) {
-        matrix_data::save_grade_comment($topicid, $studentid, $courseid, $comment, $commentdate);
+        matrix_data::save_grade_comment($topicid, $studentid, $courseid, $comment, $commentdate, $backdateaudit);
         $response['success'] = true;
         $response['message'] = get_string('gradesaved', 'block_nvq_matrix');
         $response['commentbyline'] = trim($comment) === ''
             ? ''
             : matrix_data::format_comment_byline((int) $USER->id, $savedtime, [(int) $USER->id => fullname($USER)]);
     } else {
-        matrix_data::save_grade($topicid, $studentid, $courseid, $value, $comment, $commentdate);
+        matrix_data::save_grade($topicid, $studentid, $courseid, $value, $comment, $commentdate, $backdateaudit);
         $response['success'] = true;
         $response['message'] = get_string('gradesaved', 'block_nvq_matrix');
         $response['commentbyline'] = trim($comment) === ''

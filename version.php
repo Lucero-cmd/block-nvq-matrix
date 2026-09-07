@@ -17,6 +17,55 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.20 (1.20.20) — Real gap closed: the settings-page Migration mode
+ *   toggle (v26.6.17) was the ONLY way to trigger backdated archivedtime,
+ *   which is risky in a different way than the problem it solved - a
+ *   persistent site-wide setting is easy to switch on for a migration
+ *   window and then genuinely forget to switch back off afterward,
+ *   silently weakening every ordinary backdated entry made from then on,
+ *   with no visible reminder it's still active.
+ *
+ *   New per-entry checkbox ("Also backdate the audit trail to this
+ *   date"), added next to every backdatable date field (grade comment,
+ *   IQA comment, sampling, final status) - unchecked by default, no
+ *   lingering state at all, a fresh explicit choice on every single
+ *   save. matrix_data::resolve_archivedtime() now accepts this as a
+ *   second, independent trigger alongside Migration mode - either one
+ *   causes backdating, both gated identically (block/nvq_matrix:grade
+ *   or site admin, never the 'teacher' archetype). Both mechanisms
+ *   coexist deliberately: Migration mode remains useful for a genuine
+ *   bulk-migration window (flip once, work through many records without
+ *   checking a box each time); the checkbox is the safer permanent
+ *   mechanism for occasional one-off backdated entries once migration
+ *   is complete and Migration mode is switched back off.
+ *
+ *   The IQA-comment checkbox is deliberately gated on cangrade in
+ *   matrix.mustache (not just caniqacomment, which also covers the
+ *   plain 'teacher' archetype) - it's only ever shown to someone the
+ *   checkbox would actually do something for.
+ *
+ *   All four save methods (save_grade/save_grade_comment/
+ *   save_unit_comment/save_final_status/save_sampling) gained a new
+ *   $backdateaudit parameter; all four AJAX endpoints (grade.php,
+ *   unit_comment.php, final_status.php, sample.php) gained a matching
+ *   backdateaudit POST param. No schema change.
+ *
+ * v26.6.19 (1.20.19) — REAL BUG: block_nvq_matrix.php's has_config()
+ *   returned false, hardcoded since this file was first written back
+ *   when the plugin genuinely had no admin settings at all. Never
+ *   updated when settings.php gained its first real setting
+ *   (renotifyonedit, long before this session) - which meant every
+ *   setting in settings.php, including Migration mode just added in
+ *   v26.6.17, was completely unreachable: Moodle checks has_config()
+ *   before registering a block's settings link under Site
+ *   Administration > Plugins > Blocks at all, regardless of what
+ *   settings.php actually contains. Confirmed live on staging
+ *   (2026-09-08): "NVQ Competence Matrix" was entirely absent from that
+ *   admin category's block list, not just missing its setting. Fixed by
+ *   returning true. No schema change - this plugin has needed this
+ *   fixed since renotifyonedit was first added, long before this
+ *   session found it.
+ *
  * v26.6.18 (1.20.18) — Real gap closed: sampling had no backdating
  *   support at all, unlike every other timestamped field in this
  *   plugin (grade comment, IQA comment, final status all already had a
@@ -2592,7 +2641,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026091000;
+$plugin->version   = 2026091200;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2607,4 +2656,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.18';
+$plugin->release   = '1.20.20';

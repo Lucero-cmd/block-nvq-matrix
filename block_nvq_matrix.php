@@ -76,8 +76,22 @@ class block_nvq_matrix extends block_base {
         ];
     }
 
+    /**
+     * REAL BUG FIXED HERE (v26.6.19): hardcoded false since this file
+     * was first written, back when the plugin genuinely had no admin
+     * settings at all. Never updated when settings.php gained its first
+     * real setting (renotifyonedit) - which meant that setting, and
+     * migrationmode after it, both existed in settings.php but were
+     * NEVER REACHABLE at all: Moodle checks has_config() before
+     * registering a block's settings link under Site Administration ->
+     * Plugins -> Blocks in the first place, regardless of what
+     * settings.php actually contains. Confirmed live on staging
+     * (2026-09-08): "NVQ Competence Matrix" was completely absent from
+     * that admin category's block list - not just missing its setting,
+     * missing entirely.
+     */
     public function has_config(): bool {
-        return false;
+        return true;
     }
 
     public function get_content(): stdClass {

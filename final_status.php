@@ -67,6 +67,9 @@ $courseid    = required_param('courseid', PARAM_INT);
 $action      = required_param('action', PARAM_ALPHA); // 'set' | 'clear' | 'notify'
 $status      = optional_param('status', -1, PARAM_INT);
 $setdatestr  = optional_param('setdate', '', PARAM_TEXT);
+// Per-entry checkbox (v26.6.20) - see grade.php's own comment on this
+// same param for the full explanation.
+$backdateaudit = optional_param('backdateaudit', 0, PARAM_BOOL);
 
 $response = ['success' => false];
 
@@ -111,7 +114,7 @@ $PAGE->set_context($coursecontext);
 
 try {
     if ($action === 'set') {
-        matrix_data::save_final_status($studentid, $courseid, $status, matrix_data::parse_comment_date($setdatestr));
+        matrix_data::save_final_status($studentid, $courseid, $status, matrix_data::parse_comment_date($setdatestr), $backdateaudit);
         $response['success'] = true;
         $response['message'] = get_string('statussaved', 'block_nvq_matrix');
     } else if ($action === 'clear') {

@@ -56,6 +56,9 @@ $studentid     = required_param('studentid', PARAM_INT);
 $courseid      = required_param('courseid', PARAM_INT);
 $status        = required_param('status', PARAM_INT);
 $sampledatestr = optional_param('sampledate', '', PARAM_TEXT);
+// Per-entry checkbox (v26.6.20) - see grade.php's own comment on this
+// same param for the full explanation.
+$backdateaudit = optional_param('backdateaudit', 0, PARAM_BOOL);
 
 $response = ['success' => false];
 
@@ -102,7 +105,7 @@ if (!$coursecontext
 
 try {
     $sampledate = matrix_data::parse_comment_date($sampledatestr);
-    matrix_data::save_sampling($topicid, $studentid, $courseid, $status, $sampledate);
+    matrix_data::save_sampling($topicid, $studentid, $courseid, $status, $sampledate, $backdateaudit);
     $response['success'] = true;
     $response['message'] = get_string('samplingsaved', 'block_nvq_matrix');
 } catch (\Throwable $e) {

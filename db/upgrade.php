@@ -986,5 +986,28 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026091000, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026091100) {
+        // No schema/capability change - release-string/version bump
+        // only. Fixes block_nvq_matrix.php's has_config() (hardcoded
+        // false) so this plugin's admin settings - renotifyonedit and
+        // migrationmode - are actually reachable under Site
+        // Administration > Plugins > Blocks at all. See version.php's
+        // v26.6.19 entry for the full explanation.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026091100, 'nvq_matrix');
+    }
+
+    if ($oldversion < 2026091200) {
+        // No schema/capability change - release-string/version bump
+        // only. Adds a per-entry "Also backdate the audit trail to this
+        // date" checkbox alongside Migration mode, as a second,
+        // independent trigger for matrix_data::resolve_archivedtime().
+        // See version.php's v26.6.20 entry for the full explanation.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026091200, 'nvq_matrix');
+    }
     return true;
 }
