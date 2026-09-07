@@ -2161,12 +2161,66 @@ class matrix_data {
      * @param int $courseid
      * @return array{grade: array, unitcomment: array}
      */
+    /**
+     * REAL BUG FIXED HERE (v26.6.23): resolves which liverowid a history
+     * query should scope to, given a live table + matching conditions.
+     * If a live row currently exists, scopes to ITS id specifically -
+     * never mixes in history from a previously-deleted live row for the
+     * same student/topic/course, even though that history correctly
+     * remains in the table forever. Confirmed live on staging
+     * (2026-09-08): deleting a student's record (delete_archived.php)
+     * and later re-creating it (a fresh restore) left two logically
+     * separate "generations" of history both matching the same
+     * student+topic+course - the History display then showed BOTH
+     * generations mixed together with no indication they belonged to
+     * different live rows, looking exactly like duplicate or
+     * inconsistent entries (two "Competent, 17/07/2026" entries that
+     * were genuinely two different rows, from two different
+     * generations, that happened to share the same value/date because
+     * both originated from the same original data).
+     *
+     * If NO live row currently exists (e.g. checking an archived
+     * student's history - a real, supported use case this endpoint was
+     * specifically built for), falls back to the MOST RECENT liverowid
+     * that has any history for this student/topic/course - the last
+     * generation that ever existed - rather than showing every past
+     * generation's history all mixed together.
+     *
+     * @param string $livetable
+     * @param string $historytable
+     * @param array $conditions studentid/courseid, plus topicid if applicable.
+     * @return int|null The liverowid to scope to, or null if there's no
+     *                    history at all for this student/topic/course.
+     */
+    private static function resolve_current_liverowid(string $livetable, string $historytable, array $conditions): ?int {
+        global $DB;
+
+        $live = $DB->get_record($livetable, $conditions);
+        if ($live) {
+            return (int) $live->id;
+        }
+
+        $mostrecent = $DB->get_records($historytable, $conditions, 'archivedtime DESC', 'liverowid', 0, 1);
+        if (empty($mostrecent)) {
+            return null;
+        }
+        return (int) reset($mostrecent)->liverowid;
+    }
+
     public static function get_unit_history(int $topicid, int $studentid, int $courseid): array {
         global $DB;
 
         $params = ['studentid' => $studentid, 'topicid' => $topicid, 'courseid' => $courseid];
-        $graderows = $DB->get_records('block_nvq_matrix_grades_history', $params, 'archivedtime DESC');
-        $unitcommentrows = $DB->get_records('block_nvq_matrix_unit_comments_history', $params, 'archivedtime DESC');
+
+        $gradeliverowid = self::resolve_current_liverowid('block_nvq_matrix_grades', 'block_nvq_matrix_grades_history', $params);
+        $graderows = $gradeliverowid === null
+            ? []
+            : $DB->get_records('block_nvq_matrix_grades_history', ['liverowid' => $gradeliverowid], 'archivedtime DESC');
+
+        $unitcommentliverowid = self::resolve_current_liverowid('block_nvq_matrix_unit_comments', 'block_nvq_matrix_unit_comments_history', $params);
+        $unitcommentrows = $unitcommentliverowid === null
+            ? []
+            : $DB->get_records('block_nvq_matrix_unit_comments_history', ['liverowid' => $unitcommentliverowid], 'archivedtime DESC');
 
         // Batch-fetch every referenced user once, matching this file's
         // own established "avoid N+1" convention used throughout.
@@ -2230,9 +2284,11 @@ class matrix_data {
     public static function get_sampling_history(int $topicid, int $studentid, int $courseid): array {
         global $DB;
 
-        $rows = $DB->get_records('block_nvq_matrix_sampling_history', [
-            'studentid' => $studentid, 'topicid' => $topicid, 'courseid' => $courseid,
-        ], 'archivedtime DESC');
+        $params = ['studentid' => $studentid, 'topicid' => $topicid, 'courseid' => $courseid];
+        $liverowid = self::resolve_current_liverowid('block_nvq_matrix_sampling', 'block_nvq_matrix_sampling_history', $params);
+        $rows = $liverowid === null
+            ? []
+            : $DB->get_records('block_nvq_matrix_sampling_history', ['liverowid' => $liverowid], 'archivedtime DESC');
 
         $userids = [];
         foreach ($rows as $r) {
@@ -2266,9 +2322,11 @@ class matrix_data {
     public static function get_status_history(int $studentid, int $courseid): array {
         global $DB;
 
-        $rows = $DB->get_records('block_nvq_matrix_status_history', [
-            'studentid' => $studentid, 'courseid' => $courseid,
-        ], 'archivedtime DESC');
+        $params = ['studentid' => $studentid, 'courseid' => $courseid];
+        $liverowid = self::resolve_current_liverowid('block_nvq_matrix_status', 'block_nvq_matrix_status_history', $params);
+        $rows = $liverowid === null
+            ? []
+            : $DB->get_records('block_nvq_matrix_status_history', ['liverowid' => $liverowid], 'archivedtime DESC');
 
         $userids = [];
         foreach ($rows as $r) {

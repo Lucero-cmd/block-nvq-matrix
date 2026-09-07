@@ -17,6 +17,33 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.23 (1.20.23) — REAL BUG: get_unit_history()/get_sampling_
+ *   history()/get_status_history() queried their history tables by
+ *   studentid+topicid+courseid only, with no awareness of WHICH live
+ *   row's history that actually was. Confirmed live on staging
+ *   (2026-09-08): a student's grade record was deliberately deleted
+ *   (delete_archived.php, correctly preserving its final state to
+ *   history first) and later restored via a fresh insert (a new
+ *   liverowid) - the OLD, now-orphaned history (correctly still
+ *   preserved forever, tied to the deleted row's original liverowid)
+ *   and the NEW row's own history both matched the same student+topic+
+ *   course, so the History display showed both "generations" mixed
+ *   together with no indication they belonged to different live rows -
+ *   looking exactly like duplicate or inconsistent entries (two
+ *   "Competent, 17/07/2026" rows that were genuinely two separate rows
+ *   from two separate generations, coincidentally sharing the same
+ *   value/date because both originated from the same original data).
+ *
+ *   Fixed via new private matrix_data::resolve_current_liverowid():
+ *   history is now scoped to the CURRENT live row's specific id when
+ *   one exists, or to the MOST RECENT liverowid that has any history
+ *   for that student/topic/course when no live row currently exists
+ *   (the archived-student case this endpoint was specifically built to
+ *   support) - never mixing multiple generations together. No schema
+ *   change - the underlying history rows and their liverowid values
+ *   are unchanged; this only fixes which of them get displayed
+ *   together as one continuous history.
+ *
  * v26.6.22 (1.20.22) — REAL BUG: save_grade()'s timemodified was
  *   hardcoded to the real current time unconditionally, in both its
  *   update and insert branches, regardless of any backdated
@@ -2701,7 +2728,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026091400;
+$plugin->version   = 2026091500;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2716,4 +2743,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.22';
+$plugin->release   = '1.20.23';

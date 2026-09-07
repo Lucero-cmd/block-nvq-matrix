@@ -1031,5 +1031,18 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026091400, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026091500) {
+        // No schema/capability change - release-string/version bump
+        // only. Fixes get_unit_history()/get_sampling_history()/
+        // get_status_history() to scope by the current live row's
+        // specific liverowid, rather than mixing history from a
+        // previously-deleted-and-recreated row into the current one's
+        // display. See version.php's v26.6.23 entry for the full
+        // explanation.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026091500, 'nvq_matrix');
+    }
     return true;
 }
