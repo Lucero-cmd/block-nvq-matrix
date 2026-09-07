@@ -1951,3 +1951,108 @@ a.nvq-dash-tile:hover {
     color: var(--nvq-ink-muted);
     font-style: italic;
 }
+
+/* ------------------------------------------------------------------ */
+/* On-demand History panels (v26.6.16) - one per unit card (grade +     */
+/* sampling + IQA comment together) and one on the Final Status box.    */
+/* Deliberately understated: this is an occasional-use, investigative   */
+/* feature (IQA/EQA/awarding-body sampling), not something reached for  */
+/* on every page load the way grading itself is - the toggle should sit */
+/* quietly until someone actually wants it, not compete visually with   */
+/* the grading controls right above it.                                 */
+/* ------------------------------------------------------------------ */
+
+.nvq-history-wrap {
+    margin-top: 0.6rem;
+}
+
+.nvq-history-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.3rem 0.65rem;
+    border-radius: var(--nvq-radius-pill);
+    border: 1px solid var(--nvq-border-strong);
+    background-color: transparent;
+    color: var(--nvq-ink-muted);
+    cursor: pointer;
+    transition: all 0.15s var(--nvq-ease);
+}
+
+.nvq-history-toggle svg {
+    flex: 0 0 auto;
+    display: block;
+}
+
+.nvq-history-toggle:hover {
+    border-color: var(--nvq-accent);
+    color: var(--nvq-primary);
+}
+
+.nvq-history-toggle[aria-expanded="true"] {
+    background-color: var(--nvq-surface);
+    border-color: var(--nvq-accent);
+    color: var(--nvq-primary);
+}
+
+.nvq-history-panel {
+    margin-top: 0.5rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-border);
+    background-color: var(--nvq-surface-muted);
+    font-size: 0.78rem;
+}
+
+.nvq-history-section + .nvq-history-section {
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px dashed var(--nvq-border);
+}
+
+.nvq-history-section-title {
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--nvq-ink-muted);
+    margin-bottom: 0.35rem;
+}
+
+.nvq-history-entry {
+    padding: 0.4rem 0;
+}
+
+.nvq-history-entry + .nvq-history-entry {
+    border-top: 1px solid var(--nvq-border);
+}
+
+.nvq-history-entry-value {
+    font-weight: 600;
+    color: var(--nvq-ink);
+}
+
+.nvq-history-entry-comment {
+    margin-top: 0.2rem;
+    color: var(--nvq-ink-soft);
+    white-space: pre-wrap;
+}
+
+.nvq-history-entry-meta {
+    margin-top: 0.25rem;
+    font-size: 0.72rem;
+    color: var(--nvq-ink-muted);
+}
+
+.nvq-history-loading,
+.nvq-history-empty {
+    color: var(--nvq-ink-muted);
+    font-style: italic;
+}
+
+.nvq-history-error {
+    color: var(--nvq-danger);
+}
+

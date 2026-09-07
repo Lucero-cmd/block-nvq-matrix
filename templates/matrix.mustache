@@ -12,7 +12,7 @@
     @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 }}
 
-<div class="block-nvq-matrix" data-gradeurl="{{gradeurl}}" data-sampleurl="{{sampleurl}}" data-unitcommenturl="{{unitcommenturl}}" data-sesskey="{{sesskey}}">
+<div class="block-nvq-matrix" data-gradeurl="{{gradeurl}}" data-sampleurl="{{sampleurl}}" data-unitcommenturl="{{unitcommenturl}}" data-historyurl="{{historyurl}}" data-sesskey="{{sesskey}}">
 
     {{#caneditanything}}
     {{! Single global toggle: everything that's editable (comments,
@@ -562,6 +562,41 @@
 
             </div>
 
+            {{! ── History — on-demand only, fetched via history.php the
+                 first time it's opened (see initHistoryToggles() below),
+                 never rendered server-side. Covers grade verdict/comment,
+                 sampling status, and IQA comment together for this one
+                 unit, since all three live in the same unit card and a
+                 reviewer checking one is usually checking all three.
+                 Gated on canviewall, matching history.php's own
+                 capability requirement (:viewall) exactly, so the button
+                 never appears for someone who couldn't successfully call
+                 the endpoint anyway. Added v26.6.16 as the first
+                 user-facing surface for the audit trail built in
+                 v26.6.13. ── }}
+            {{#canviewall}}
+            <div class="nvq-history-wrap" data-topicid="{{topicid}}" data-studentid="{{studentid}}" data-courseid="{{courseid}}">
+                <button type="button" class="nvq-history-toggle" aria-expanded="false"
+                        aria-label="{{#str}}historybutton, block_nvq_matrix{{/str}}"
+                        title="{{#str}}historybutton, block_nvq_matrix{{/str}}">
+                    <svg viewBox="0 0 16 16" width="13" height="13" focusable="false" aria-hidden="true">
+                        <path fill="currentColor" d="M8 3.5a.5.5 0 0 1 .5.5v4.2l2.646 1.53a.5.5 0 0 1-.5.866l-2.896-1.674A.5.5 0 0 1 7.5 8.5V4a.5.5 0 0 1 .5-.5z"/>
+                        <path fill="currentColor" d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0-1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z"/>
+                    </svg>
+                    {{#str}}historybutton, block_nvq_matrix{{/str}}
+                </button>
+                <div class="nvq-history-panel"
+                     hidden
+                     data-loadingtext="{{#str}}loading, moodle{{/str}}"
+                     data-nonetext="{{#str}}historynone, block_nvq_matrix{{/str}}"
+                     data-errortext="{{#str}}historyerror, block_nvq_matrix{{/str}}"
+                     data-changedonprefix="{{#str}}historychangedonprefix, block_nvq_matrix{{/str}}"
+                     data-gradelabel="{{#str}}historygradelabel, block_nvq_matrix{{/str}}"
+                     data-samplinglabel="{{#str}}historysamplinglabel, block_nvq_matrix{{/str}}"
+                     data-commentlabel="{{#str}}historyunitcommentlabel, block_nvq_matrix{{/str}}"></div>
+            </div>
+            {{/canviewall}}
+
         </div>
 
     </div>
@@ -639,6 +674,32 @@
         {{#hasbeennotified}}
         <div class="nvq-finalstatus-meta">{{notifiedinfo}}</div>
         {{/hasbeennotified}}
+
+        {{! See the unit-level History toggle's own comment above for the
+            full design rationale - identical here, just for the course's
+            final status instead of one unit. No topicid attribute at
+            all (deliberately, not left empty) - the JS below uses its
+            presence/absence to decide which history.php action to
+            request. }}
+        {{#canviewall}}
+        <div class="nvq-history-wrap" data-studentid="{{studentid}}" data-courseid="{{courseid}}">
+            <button type="button" class="nvq-history-toggle" aria-expanded="false"
+                    aria-label="{{#str}}historybutton, block_nvq_matrix{{/str}}"
+                    title="{{#str}}historybutton, block_nvq_matrix{{/str}}">
+                <svg viewBox="0 0 16 16" width="13" height="13" focusable="false" aria-hidden="true">
+                    <path fill="currentColor" d="M8 3.5a.5.5 0 0 1 .5.5v4.2l2.646 1.53a.5.5 0 0 1-.5.866l-2.896-1.674A.5.5 0 0 1 7.5 8.5V4a.5.5 0 0 1 .5-.5z"/>
+                    <path fill="currentColor" d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0-1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z"/>
+                </svg>
+                {{#str}}historybutton, block_nvq_matrix{{/str}}
+            </button>
+            <div class="nvq-history-panel"
+                 hidden
+                 data-loadingtext="{{#str}}loading, moodle{{/str}}"
+                 data-nonetext="{{#str}}historynone, block_nvq_matrix{{/str}}"
+                 data-errortext="{{#str}}historyerror, block_nvq_matrix{{/str}}"
+                 data-changedonprefix="{{#str}}historychangedonprefix, block_nvq_matrix{{/str}}"></div>
+        </div>
+        {{/canviewall}}
     </div>
     {{/finalstatusboxes}}
 
@@ -1104,6 +1165,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         });
 
         initStudentPicker(matrix);
+        initHistoryToggles(matrix);
 
         matrix.addEventListener('click', function (e) {
             var btn = e.target.closest('.nvq-grade-btn');
@@ -2316,6 +2378,187 @@ function nvqToggleGapMode(matrix, toggleBtn) {
             readonly.innerHTML = '<span class="nvq-sample-readonly-blank"></span>';
             readonly.firstChild.textContent = readonly.dataset.blanktext;
         }
+    }
+
+    /**
+     * Wires the on-demand "History" toggle - both the unit-level one
+     * (grade + sampling + IQA comment together) and the Final Status
+     * one. Delegated on the matrix container, matching every other
+     * click handler in this file, since .nvq-history-toggle buttons are
+     * only ever rendered server-side (never created dynamically), so a
+     * plain delegated listener is all this needs.
+     *
+     * Fetched once per wrap, the first time it's opened - history.php
+     * is read-only and only changes if THIS SAME page session makes a
+     * new edit, which nothing here currently invalidates automatically
+     * (a page reload always shows current data; a stale cached history
+     * panel left open across an edit within the same session is a minor,
+     * acceptable gap given how rarely this panel is expected to stay
+     * open while also actively editing the exact same field).
+     *
+     * Added v26.6.16 - the first user-facing surface for the audit
+     * trail built in v26.6.13.
+     */
+    function initHistoryToggles(matrix) {
+        matrix.addEventListener('click', function (e) {
+            var toggle = e.target.closest('.nvq-history-toggle');
+            if (!toggle) { return; }
+
+            var wrap = toggle.closest('.nvq-history-wrap');
+            var panel = wrap ? wrap.querySelector('.nvq-history-panel') : null;
+            if (!wrap || !panel) { return; }
+
+            var opening = panel.hidden;
+            panel.hidden = !opening;
+            toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
+
+            if (opening && wrap.dataset.loaded !== '1') {
+                loadHistory(matrix, wrap, panel);
+            }
+        });
+    }
+
+    /**
+     * Fetches one wrap's history from history.php. Which action gets
+     * requested is decided purely by whether the wrap carries a
+     * data-topicid attribute - present for a unit's own wrap, absent
+     * (not empty - genuinely not rendered) for the Final Status wrap.
+     */
+    function loadHistory(matrix, wrap, panel) {
+        var historyurl = matrix.dataset.historyurl;
+        var sesskey    = matrix.dataset.sesskey;
+        var studentid  = wrap.dataset.studentid;
+        var courseid   = wrap.dataset.courseid;
+        var topicid    = wrap.dataset.topicid;
+
+        if (!historyurl || !studentid || !courseid) { return; }
+
+        panel.innerHTML = '<div class="nvq-history-loading">' + escapeHtml(panel.dataset.loadingtext) + '</div>';
+
+        var body = new URLSearchParams({
+            action    : topicid ? 'unit' : 'status',
+            studentid : studentid,
+            courseid  : courseid,
+            sesskey   : sesskey,
+        });
+        if (topicid) { body.set('topicid', topicid); }
+
+        fetch(historyurl, {
+            method      : 'POST',
+            credentials : 'same-origin',
+            headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body        : body.toString(),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) {
+                panel.innerHTML = '<div class="nvq-history-error">' + escapeHtml(data.error || panel.dataset.errortext) + '</div>';
+                return;
+            }
+            wrap.dataset.loaded = '1';
+            panel.innerHTML = topicid ? renderUnitHistory(data, panel) : renderStatusHistory(data, panel);
+        })
+        .catch(function () {
+            panel.innerHTML = '<div class="nvq-history-error">' + escapeHtml(panel.dataset.errortext) + '</div>';
+        });
+    }
+
+    function historyEmptyRow(panel) {
+        return '<div class="nvq-history-empty">' + escapeHtml(panel.dataset.nonetext) + '</div>';
+    }
+
+    /**
+     * One labelled section per field (Grade / Sampling / IQA comment),
+     * each its own independent chronological list - deliberately not
+     * merged into one interleaved timeline, since they're three
+     * genuinely separate fields with separate capability gates on the
+     * live matrix (:grade / :sample / :iqacomment), and merging them
+     * would obscure which field a given entry actually belongs to.
+     */
+    function renderUnitHistory(data, panel) {
+        var html = '';
+
+        html += '<div class="nvq-history-section"><div class="nvq-history-section-title">' + escapeHtml(panel.dataset.gradelabel) + '</div>';
+        if (data.grade.length) {
+            data.grade.forEach(function (row) {
+                html += '<div class="nvq-history-entry">'
+                    + '<span class="nvq-history-entry-value">' + escapeHtml(row.valuetext) + '</span>'
+                    + (row.comment ? '<div class="nvq-history-entry-comment">' + escapeHtml(row.comment) + '</div>' : '')
+                    + historyMetaLine(row, panel)
+                    + '</div>';
+            });
+        } else {
+            html += historyEmptyRow(panel);
+        }
+        html += '</div>';
+
+        html += '<div class="nvq-history-section"><div class="nvq-history-section-title">' + escapeHtml(panel.dataset.samplinglabel) + '</div>';
+        if (data.sampling.length) {
+            data.sampling.forEach(function (row) {
+                html += '<div class="nvq-history-entry">'
+                    + '<span class="nvq-history-entry-value">' + escapeHtml(row.statustext) + '</span>'
+                    + historyMetaLine(row, panel)
+                    + '</div>';
+            });
+        } else {
+            html += historyEmptyRow(panel);
+        }
+        html += '</div>';
+
+        html += '<div class="nvq-history-section"><div class="nvq-history-section-title">' + escapeHtml(panel.dataset.commentlabel) + '</div>';
+        if (data.unitcomment.length) {
+            data.unitcomment.forEach(function (row) {
+                html += '<div class="nvq-history-entry">'
+                    + '<div class="nvq-history-entry-comment">' + escapeHtml(row.comment) + '</div>'
+                    + historyMetaLine(row, panel)
+                    + '</div>';
+            });
+        } else {
+            html += historyEmptyRow(panel);
+        }
+        html += '</div>';
+
+        return html;
+    }
+
+    function renderStatusHistory(data, panel) {
+        if (!data.status.length) {
+            return historyEmptyRow(panel);
+        }
+        var html = '';
+        data.status.forEach(function (row) {
+            html += '<div class="nvq-history-entry">'
+                + '<span class="nvq-history-entry-value">' + escapeHtml(row.statustext) + '</span>'
+                + (row.notifiedtext ? '<div class="nvq-history-entry-comment">' + escapeHtml(row.notifiedtext) + '</div>' : '')
+                + historyMetaLine(row, panel)
+                + '</div>';
+        });
+        return html;
+    }
+
+    /**
+     * "Set by X, DD/MM/YYYY — Changed DD/MM/YYYY HH:MM" - the byline
+     * shared by every history entry type. settime is when THIS value
+     * was originally set (mirrors format_comment_byline()'s own "Name,
+     * date" convention elsewhere in this plugin); archivedtime is
+     * always the real moment it stopped being current, per
+     * matrix_data::snapshot_history()'s own docblock.
+     */
+    function historyMetaLine(row, panel) {
+        var setpart = row.setby ? (escapeHtml(row.setby) + (row.settime ? ', ' + escapeHtml(row.settime) : '')) : '';
+        var changedpart = escapeHtml(panel.dataset.changedonprefix) + ' ' + escapeHtml(row.archivedtime);
+        return '<div class="nvq-history-entry-meta">' + setpart + (setpart ? ' — ' : '') + changedpart + '</div>';
+    }
+
+    /**
+     * Minimal HTML-escaping for history entries inserted via innerHTML
+     * above - these include real user-authored comment text, which must
+     * never be inserted unescaped.
+     */
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = (str === undefined || str === null) ? '' : String(str);
+        return div.innerHTML;
     }
 
     // Init after DOM ready.

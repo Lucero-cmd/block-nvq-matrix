@@ -245,6 +245,21 @@ $string['assessorstale']         = '(no longer eligible)';
 $string['backtomatrix']          = 'Back to matrix';
 $string['assessorpageintro']     = 'Choose the designated Assessor for each course you manage. The Assessor is notified when a student submits new evidence.';
 $string['tasknotifyassessors']   = 'Notify assessors of new evidence submissions';
+
+// History (audit trail UI, v26.6.16).
+$string['historybutton']          = 'History';
+$string['historytitle']           = 'Change history';
+$string['historynotifiedon']      = 'Notified {$a->name}, {$a->date}';
+$string['historysamplingblank']   = 'Not set';
+$string['historystatusnotset']    = 'Not yet set';
+$string['historynone']            = 'No changes recorded yet.';
+$string['historygradelabel']      = 'Grade';
+$string['historyunitcommentlabel'] = 'IQA comment';
+$string['historysamplinglabel']   = 'Sampling';
+$string['historystatuslabel']     = 'Final status';
+$string['historychangedonprefix'] = 'Changed';
+$string['historyerror']           = 'Could not load history.';
+$string['historynopermission']    = 'You do not have permission to view this history.';
 $string['renotifyonedit']        = 'Notify assessor on every resubmission';
 $string['renotifyonedit_desc']   = 'When enabled (default), the designated Assessor is notified every time a student saves changes to an eportfolio item that has competencies linked to it - including a re-edit where the linked competencies haven\'t actually changed (exaport re-links them on every save regardless). When disabled, the Assessor is only notified the first time a given item triggers a submission; later re-edits of that same item are silent.';
 $string['assessorerror']         = 'Could not save assessor. Please try again.';

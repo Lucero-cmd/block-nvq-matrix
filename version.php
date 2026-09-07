@@ -17,6 +17,42 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.16 (1.20.16) — NEW FEATURE: the first user-facing surface for
+ *   the audit trail built in v26.6.13. Until now the four history
+ *   tables were captured correctly but genuinely invisible - nobody
+ *   could see them anywhere in the plugin's UI without a direct
+ *   database query.
+ *
+ *   New on-demand "History" toggle, one per unit card (covering grade
+ *   verdict/comment, sampling status, and IQA comment together, since
+ *   all three live in the same unit card and a reviewer checking one is
+ *   usually checking all three) and one on the Final Status box.
+ *   Deliberately fetched only when opened, not rendered server-side or
+ *   preloaded - this is an occasional, investigative feature
+ *   (IQA/EQA/awarding-body sampling), not a daily-use one, and shouldn't
+ *   add visual weight or query cost to every page load for a feature
+ *   most viewers won't touch most of the time. Not shown to a student
+ *   viewing their own matrix - this is staff-facing QA information, not
+ *   currently surfaced to the learner it's about.
+ *
+ *   New history.php AJAX endpoint (two actions: unit, status), gated on
+ *   block/nvq_matrix:viewall - deliberately the same capability that
+ *   already governs staff-side visibility of the live matrix, not a
+ *   narrower per-field one, and deliberately NOT requiring active
+ *   enrolment the way grade.php/sample.php do for their write actions,
+ *   since one of the most useful cases for checking history is exactly
+ *   an already-archived student.
+ *
+ *   Three new read-only methods in matrix_data.php
+ *   (get_unit_history()/get_sampling_history()/get_status_history()),
+ *   kept as three separate calls rather than one combined one, matching
+ *   how the live page itself already treats grading, sampling, and
+ *   status as separate capability domains.
+ *
+ *   templates/matrix.mustache and styles.css updated for the toggle
+ *   button and panel; new lang strings added. No schema change - purely
+ *   additive on top of v26.6.13's existing tables.
+ *
  * v26.6.15 (1.20.15) — REAL BUG: the v26.6.12 evidence-only archived-
  *   detection path's ambiguity guard only excluded a candidate course
  *   explained by a CURRENT enrolment - it said nothing about two
@@ -2497,7 +2533,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026090700;
+$plugin->version   = 2026090800;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2512,4 +2548,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.15';
+$plugin->release   = '1.20.16';

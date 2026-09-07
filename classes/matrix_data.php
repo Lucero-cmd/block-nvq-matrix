@@ -100,6 +100,7 @@ class matrix_data {
                 'gradeurl'      => (new \moodle_url('/blocks/nvq_matrix/grade.php'))->out(false),
                 'sampleurl'     => (new \moodle_url('/blocks/nvq_matrix/sample.php'))->out(false),
                 'unitcommenturl' => (new \moodle_url('/blocks/nvq_matrix/unit_comment.php'))->out(false),
+                'historyurl'    => (new \moodle_url('/blocks/nvq_matrix/history.php'))->out(false),
                 'evidencetypeurl' => (new \moodle_url('/blocks/nvq_matrix/evidence_type.php'))->out(false),
                 'finalstatusurl' => (new \moodle_url('/blocks/nvq_matrix/final_status.php'))->out(false),
                 'sesskey'       => sesskey(),
@@ -161,6 +162,7 @@ class matrix_data {
                 'gradeurl'      => (new \moodle_url('/blocks/nvq_matrix/grade.php'))->out(false),
                 'sampleurl'     => (new \moodle_url('/blocks/nvq_matrix/sample.php'))->out(false),
                 'unitcommenturl' => (new \moodle_url('/blocks/nvq_matrix/unit_comment.php'))->out(false),
+                'historyurl'    => (new \moodle_url('/blocks/nvq_matrix/history.php'))->out(false),
                 'evidencetypeurl' => (new \moodle_url('/blocks/nvq_matrix/evidence_type.php'))->out(false),
                 'finalstatusurl' => (new \moodle_url('/blocks/nvq_matrix/final_status.php'))->out(false),
                 'sesskey'       => sesskey(),
@@ -509,6 +511,13 @@ class matrix_data {
 
         $unitcommenturl = (new \moodle_url('/blocks/nvq_matrix/unit_comment.php'))->out(false);
 
+        // History URL base — used by the on-demand History toggle's AJAX
+        // fetch (v26.6.16). Built here alongside the other endpoint URLs
+        // for consistency, even though, unlike them, nothing in this
+        // build() method writes to history.php - it's purely a read
+        // endpoint the client calls independently.
+        $historyurl = (new \moodle_url('/blocks/nvq_matrix/history.php'))->out(false);
+
         // ----------------------------------------------------------------
         // Build template data.
         // ----------------------------------------------------------------
@@ -851,6 +860,7 @@ class matrix_data {
             'gradeurl'      => $gradeurl,
             'sampleurl'     => $sampleurl,
             'unitcommenturl' => $unitcommenturl,
+            'historyurl'    => $historyurl,
             'evidencetypeurl' => $evidencetypeurl,
             'finalstatusurl' => $finalstatusurl,
             'sesskey'       => sesskey(),
@@ -2076,6 +2086,223 @@ class matrix_data {
      * @param array $commenternames Map of userid → fullname, pre-resolved for the whole matrix.
      * @return string               e.g. "Jane Smith, 08/07/2026", or '' if unresolvable.
      */
+    /**
+     * Returns one unit's full change history for one student - every past
+     * grade verdict/comment and IQA comment, most recent first. Sampling
+     * history is deliberately excluded here and returned separately by
+     * get_sampling_history() below - kept as two methods rather than one
+     * combined call so history.php's two actions (grade/comment vs
+     * sampling) can be requested independently, matching how the live
+     * page itself already treats grading and sampling as separate
+     * concerns with separate capability gates (:grade vs :sample).
+     *
+     * Deliberately does NOT include the current live value - that's
+     * already visible on the page itself right above the History
+     * toggle; this only ever shows what it USED TO BE. Added v26.6.16
+     * alongside history.php, the first user-facing surface for the
+     * audit trail built in v26.6.13.
+     *
+     * @param int $topicid
+     * @param int $studentid
+     * @param int $courseid
+     * @return array{grade: array, unitcomment: array}
+     */
+    public static function get_unit_history(int $topicid, int $studentid, int $courseid): array {
+        global $DB;
+
+        $params = ['studentid' => $studentid, 'topicid' => $topicid, 'courseid' => $courseid];
+        $graderows = $DB->get_records('block_nvq_matrix_grades_history', $params, 'archivedtime DESC');
+        $unitcommentrows = $DB->get_records('block_nvq_matrix_unit_comments_history', $params, 'archivedtime DESC');
+
+        // Batch-fetch every referenced user once, matching this file's
+        // own established "avoid N+1" convention used throughout.
+        $userids = [];
+        foreach ($graderows as $r) {
+            $userids[(int) $r->gradedby] = true;
+            $userids[(int) $r->commentedby] = true;
+        }
+        foreach ($unitcommentrows as $r) {
+            $userids[(int) $r->iqacommentby] = true;
+        }
+        unset($userids[0]);
+        $usernames = self::get_fullnames_for_ids(array_keys($userids));
+
+        $grade = [];
+        foreach ($graderows as $r) {
+            $grade[] = (object) [
+                'valuetext'    => self::format_grade_value_text($r->value),
+                'comment'      => (string) $r->comment,
+                'setby'        => $usernames[(int) $r->gradedby] ?? '',
+                'settime'      => $r->timemodified ? userdate($r->timemodified, '%d/%m/%Y') : '',
+                'commentedby'  => $usernames[(int) $r->commentedby] ?? '',
+                'commenttime'  => $r->commenttime ? userdate($r->commenttime, '%d/%m/%Y') : '',
+                'archivedtime' => userdate($r->archivedtime, '%d/%m/%Y %H:%M'),
+            ];
+        }
+
+        $unitcomment = [];
+        foreach ($unitcommentrows as $r) {
+            // IQA comment only - assessorcomment is legacy/unused (see
+            // unit_comment.php's own docblock: the separate
+            // assessor-comment path was removed per client feedback),
+            // still snapshotted for completeness but not worth surfacing
+            // in a history view nobody writes to anymore.
+            if (trim((string) $r->iqacomment) === '') {
+                continue;
+            }
+            $unitcomment[] = (object) [
+                'comment'      => (string) $r->iqacomment,
+                'setby'        => $usernames[(int) $r->iqacommentby] ?? '',
+                'settime'      => $r->iqacommenttime ? userdate($r->iqacommenttime, '%d/%m/%Y') : '',
+                'archivedtime' => userdate($r->archivedtime, '%d/%m/%Y %H:%M'),
+            ];
+        }
+
+        return ['grade' => $grade, 'unitcomment' => $unitcomment];
+    }
+
+    /**
+     * Returns one unit's sampling history for one student, most recent
+     * first. Deliberately separate from get_unit_history() - see that
+     * method's own docblock for why.
+     *
+     * @param int $topicid
+     * @param int $studentid
+     * @param int $courseid
+     * @return array
+     */
+    public static function get_sampling_history(int $topicid, int $studentid, int $courseid): array {
+        global $DB;
+
+        $rows = $DB->get_records('block_nvq_matrix_sampling_history', [
+            'studentid' => $studentid, 'topicid' => $topicid, 'courseid' => $courseid,
+        ], 'archivedtime DESC');
+
+        $userids = [];
+        foreach ($rows as $r) {
+            $userids[(int) $r->sampledby] = true;
+        }
+        unset($userids[0]);
+        $usernames = self::get_fullnames_for_ids(array_keys($userids));
+
+        $sampling = [];
+        foreach ($rows as $r) {
+            $sampling[] = (object) [
+                'statustext'   => self::format_sampling_status_text($r->status),
+                'setby'        => $usernames[(int) $r->sampledby] ?? '',
+                'settime'      => $r->timemodified ? userdate($r->timemodified, '%d/%m/%Y') : '',
+                'archivedtime' => userdate($r->archivedtime, '%d/%m/%Y %H:%M'),
+            ];
+        }
+
+        return $sampling;
+    }
+
+    /**
+     * Returns a course's final Pass/Fail status history for one student,
+     * most recent first.
+     *
+     * @param int $studentid
+     * @param int $courseid
+     * @return array
+     */
+    public static function get_status_history(int $studentid, int $courseid): array {
+        global $DB;
+
+        $rows = $DB->get_records('block_nvq_matrix_status_history', [
+            'studentid' => $studentid, 'courseid' => $courseid,
+        ], 'archivedtime DESC');
+
+        $userids = [];
+        foreach ($rows as $r) {
+            $userids[(int) $r->setby] = true;
+            $userids[(int) $r->notifiedby] = true;
+        }
+        unset($userids[0]);
+        $usernames = self::get_fullnames_for_ids(array_keys($userids));
+
+        $status = [];
+        foreach ($rows as $r) {
+            $status[] = (object) [
+                'statustext'   => self::format_final_status_text($r->status),
+                'setby'        => $usernames[(int) $r->setby] ?? '',
+                'settime'      => $r->timemodified ? userdate($r->timemodified, '%d/%m/%Y') : '',
+                'notifiedtext' => $r->notifiedtime
+                    ? get_string('historynotifiedon', 'block_nvq_matrix', [
+                        'name' => $usernames[(int) $r->notifiedby] ?? '',
+                        'date' => userdate($r->notifiedtime, '%d/%m/%Y'),
+                    ])
+                    : '',
+                'archivedtime' => userdate($r->archivedtime, '%d/%m/%Y %H:%M'),
+            ];
+        }
+
+        return $status;
+    }
+
+    /**
+     * Small shared formatting helpers for the three history methods
+     * above - kept private and tiny rather than pulling in whatever
+     * client-side label logic the live badges use, since this endpoint
+     * returns plain JSON text, not markup with data-attributes.
+     */
+    private static function format_grade_value_text($value): string {
+        if ($value === null || $value === '') {
+            return get_string('notgraded', 'block_nvq_matrix');
+        }
+        return ((int) $value === 1)
+            ? get_string('competent', 'block_nvq_matrix')
+            : get_string('notyet', 'block_nvq_matrix');
+    }
+
+    private static function format_sampling_status_text($status): string {
+        $status = (int) $status;
+        if ($status === 1) {
+            return get_string('sampled', 'block_nvq_matrix');
+        }
+        if ($status === 2) {
+            return get_string('notyetsampled', 'block_nvq_matrix');
+        }
+        return get_string('historysamplingblank', 'block_nvq_matrix');
+    }
+
+    private static function format_final_status_text($status): string {
+        if ($status === null || $status === '') {
+            return get_string('historystatusnotset', 'block_nvq_matrix');
+        }
+        return ((int) $status === 1)
+            ? get_string('finalstatuspass', 'block_nvq_matrix')
+            : get_string('finalstatusfail', 'block_nvq_matrix');
+    }
+
+    /**
+     * Batch fullname lookup for a list of user ids, matching this file's
+     * own "avoid N+1" convention. Returns userid => fullname.
+     *
+     * @param array $userids
+     * @return array
+     */
+    private static function get_fullnames_for_ids(array $userids): array {
+        global $DB;
+
+        $usernames = [];
+        if (empty($userids)) {
+            return $usernames;
+        }
+        list($uinsql, $uparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'hu');
+        $users = $DB->get_records_select(
+            'user',
+            "id $uinsql",
+            $uparams,
+            '',
+            'id, firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename'
+        );
+        foreach ($users as $u) {
+            $usernames[$u->id] = fullname($u);
+        }
+        return $usernames;
+    }
+
     public static function format_comment_byline(int $userid, int $timestamp, array $commenternames): string {
         if (!$userid || empty($commenternames[$userid])) {
             return '';

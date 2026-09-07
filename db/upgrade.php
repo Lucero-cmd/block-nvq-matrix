@@ -949,5 +949,17 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026090700, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026090800) {
+        // No schema/capability change - release-string/version bump
+        // only. Adds the on-demand "History" UI (history.php,
+        // matrix_data.php's three new read methods, matrix.mustache,
+        // styles.css) - the first user-facing surface for the audit
+        // trail tables created in the 2026090500 step above. See
+        // version.php's v26.6.16 entry for the full explanation.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026090800, 'nvq_matrix');
+    }
     return true;
 }
