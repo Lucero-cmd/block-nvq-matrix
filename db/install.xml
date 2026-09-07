@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="blocks/nvq_matrix/db" VERSION="20260721" COMMENT="XMLDB file for Moodle blocks/nvq_matrix"
+<XMLDB PATH="blocks/nvq_matrix/db" VERSION="20260905" COMMENT="XMLDB file for Moodle blocks/nvq_matrix"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -174,6 +174,108 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="itemid" UNIQUE="true" FIELDS="itemid" COMMENT="One 'already notified' record per item. Deliberately no separate itemid foreign key - same reasoning as block_nvq_matrix_assessor's courseid index: a KEY and an INDEX on the identical single field collide in Moodle's xmldb_table regardless of naming, confirmed the hard way on that table already. No REFTABLE relationship declared for the same reason - block_exaportitem lives in a different plugin (block_exaport) entirely, so a formal foreign key across plugin boundaries isn't meaningful here regardless."/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_grades_history" COMMENT="Audit trail for block_nvq_matrix_grades: a snapshot of the OLD row, inserted immediately before every update_record() overwrite in matrix_data::save_grade(). Never updated itself, only ever inserted - a genuine append-only log. Added v26.6.13 in response to a real gap identified in a full-plugin audit: this plugin previously had no record of a verdict's history at all once overwritten - a real weakness for an NVQ Competence Matrix, where IQA/EQA/awarding-body sampling can reasonably expect to trace who changed a grade, when, and what it used to say. archivedtime is separate from timemodified: timemodified says when THIS (now historical) value was originally set; archivedtime says when it stopped being current (i.e. when the overwrite happened) - together with the next-newer history row (or the live row, if none), the full timeline of a single unit's grading history is reconstructible.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="liverowid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="block_nvq_matrix_grades.id this snapshot belonged to. Not a hard FK with cascade - the live row's id is stable across edits (same row, updated in place), so this remains valid for the row's whole lifetime."/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Copied from the live row at snapshot time, for querying history without a join."/>
+        <FIELD NAME="topicid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="value" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="The verdict as it stood before this change: 1 = Competent, 0 = Not Yet Competent, NULL = no verdict."/>
+        <FIELD NAME="comment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="gradedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When this (now historical) verdict was originally set."/>
+        <FIELD NAME="commentedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="commenttime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="archivedtime" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="When this value stopped being current (i.e. the moment of the overwrite that superseded it)."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="gradedby" TYPE="foreign" FIELDS="gradedby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="commentedby" TYPE="foreign" FIELDS="commentedby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="liverowid" FIELDS="liverowid" COMMENT="Every past snapshot for one live grade row, in insertion order - the standard lookup for displaying a unit's full grading history."/>
+        <INDEX NAME="studentid-topicid-courseid" FIELDS="studentid, topicid, courseid" COMMENT="Non-unique, unlike the live table's own index - many historical rows are expected per student/unit/course over time."/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_sampling_history" COMMENT="Audit trail for block_nvq_matrix_sampling - see block_nvq_matrix_grades_history's comment for the full design rationale, identical here.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="liverowid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="block_nvq_matrix_sampling.id this snapshot belonged to."/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="topicid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" COMMENT="The status as it stood before this change: 0 = blank, 1 = Sampled, 2 = Not Yet Sampled."/>
+        <FIELD NAME="sampledby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="archivedtime" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="sampledby" TYPE="foreign" FIELDS="sampledby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="liverowid" FIELDS="liverowid"/>
+        <INDEX NAME="studentid-topicid-courseid" FIELDS="studentid, topicid, courseid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_unit_comments_history" COMMENT="Audit trail for block_nvq_matrix_unit_comments - see block_nvq_matrix_grades_history's comment for the full design rationale, identical here. Both the assessor comment and IQA comment are snapshotted together as one row, mirroring the live table's own single-row-holds-both structure.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="liverowid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="block_nvq_matrix_unit_comments.id this snapshot belonged to."/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="topicid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="assessorcomment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="assessorcommentby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="assessorcommenttime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="iqacomment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="iqacommentby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="iqacommenttime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="archivedtime" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="assessorcommentby" TYPE="foreign" FIELDS="assessorcommentby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="iqacommentby" TYPE="foreign" FIELDS="iqacommentby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="liverowid" FIELDS="liverowid"/>
+        <INDEX NAME="studentid-topicid-courseid" FIELDS="studentid, topicid, courseid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="block_nvq_matrix_status_history" COMMENT="Audit trail for block_nvq_matrix_status - see block_nvq_matrix_grades_history's comment for the full design rationale, identical here. notifiedtime/notifiedby are snapshotted too, so a history row also preserves whether/when a completion notification had been sent as of that point, even though notify actions don't go through save_final_status() directly (see matrix_data::send_completion_notification(), which updates the live row's notifiedtime/notifiedby without changing status - a snapshot is still taken here since the live row as a whole changed).">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="liverowid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="block_nvq_matrix_status.id this snapshot belonged to."/>
+        <FIELD NAME="studentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="1 = Pass, 0 = Fail, NULL = not yet set, as it stood before this change."/>
+        <FIELD NAME="setby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="notifiedtime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="notifiedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="archivedtime" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="studentid" TYPE="foreign" FIELDS="studentid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="setby" TYPE="foreign" FIELDS="setby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="notifiedby" TYPE="foreign" FIELDS="notifiedby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="liverowid" FIELDS="liverowid"/>
+        <INDEX NAME="studentid-courseid" FIELDS="studentid, courseid"/>
       </INDEXES>
     </TABLE>
   </TABLES>

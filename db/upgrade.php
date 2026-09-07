@@ -802,5 +802,128 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026090400, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026090500) {
+        // NEW FEATURE: audit trail for grades/sampling/unit_comments/status.
+        // Real gap identified in a full-plugin audit (2026-09-04): every
+        // save_*() method in matrix_data.php overwrites its live row in
+        // place via update_record() - the previous verdict/status/comment,
+        // and who set it and when, was permanently lost the moment it was
+        // changed again, with no record anywhere (this plugin fires no
+        // Moodle events, so Site Administration > Reports > Logs never
+        // captured these writes either). For an NVQ Competence Matrix,
+        // where IQA/EQA/awarding-body sampling can reasonably expect to
+        // trace a grading history, this was a real weakness. See each new
+        // table's own comment below for the full design rationale.
+        $historytables = [
+            'block_nvq_matrix_grades_history' => [
+                ['liverowid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['studentid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['topicid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['value', XMLDB_TYPE_INTEGER, '1', null, null, null, null],
+                ['comment', XMLDB_TYPE_TEXT, null, null, null, null, null],
+                ['gradedby', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['timemodified', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['commentedby', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['commenttime', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['archivedtime', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+            ],
+            'block_nvq_matrix_sampling_history' => [
+                ['liverowid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['studentid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['topicid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['status', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, null],
+                ['sampledby', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['archivedtime', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+            ],
+            'block_nvq_matrix_unit_comments_history' => [
+                ['liverowid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['studentid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['topicid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['assessorcomment', XMLDB_TYPE_TEXT, null, null, null, null, null],
+                ['assessorcommentby', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['assessorcommenttime', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['iqacomment', XMLDB_TYPE_TEXT, null, null, null, null, null],
+                ['iqacommentby', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['iqacommenttime', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['archivedtime', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+            ],
+            'block_nvq_matrix_status_history' => [
+                ['liverowid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['studentid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+                ['status', XMLDB_TYPE_INTEGER, '1', null, null, null, null],
+                ['setby', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['timemodified', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['notifiedtime', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['notifiedby', XMLDB_TYPE_INTEGER, '10', null, null, null, null],
+                ['archivedtime', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null],
+            ],
+        ];
+
+        // Foreign keys, matching db/install.xml's <KEYS> for each of these
+        // four tables exactly - a fresh install (install.xml) and an
+        // upgraded site (this file) must produce byte-for-byte identical
+        // schemas, not just matching fields. Format: [keyname, fieldname,
+        // reftable]. Same "advisory metadata only, not DB-enforced" caveat
+        // already noted elsewhere in this file (block_nvq_matrix_assessor)
+        // applies here too - these don't change behaviour, but Moodle's
+        // own dev tools (admin/tool/xmldb) expect install.xml and
+        // upgrade.php to agree regardless.
+        $historykeys = [
+            'block_nvq_matrix_grades_history' => [
+                ['studentid', 'studentid', 'user'],
+                ['gradedby', 'gradedby', 'user'],
+                ['commentedby', 'commentedby', 'user'],
+                ['courseid', 'courseid', 'course'],
+            ],
+            'block_nvq_matrix_sampling_history' => [
+                ['studentid', 'studentid', 'user'],
+                ['sampledby', 'sampledby', 'user'],
+                ['courseid', 'courseid', 'course'],
+            ],
+            'block_nvq_matrix_unit_comments_history' => [
+                ['studentid', 'studentid', 'user'],
+                ['assessorcommentby', 'assessorcommentby', 'user'],
+                ['iqacommentby', 'iqacommentby', 'user'],
+                ['courseid', 'courseid', 'course'],
+            ],
+            'block_nvq_matrix_status_history' => [
+                ['studentid', 'studentid', 'user'],
+                ['setby', 'setby', 'user'],
+                ['notifiedby', 'notifiedby', 'user'],
+                ['courseid', 'courseid', 'course'],
+            ],
+        ];
+
+        foreach ($historytables as $tablename => $fielddefs) {
+            $table = new xmldb_table($tablename);
+            if ($dbman->table_exists($table)) {
+                continue;
+            }
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            foreach ($fielddefs as $f) {
+                $table->add_field($f[0], $f[1], $f[2], $f[3], $f[4], $f[5], $f[6]);
+            }
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            foreach ($historykeys[$tablename] as $k) {
+                $table->add_key($k[0], XMLDB_KEY_FOREIGN, [$k[1]], $k[2], ['id']);
+            }
+            $table->add_index('liverowid', XMLDB_INDEX_NOTUNIQUE, ['liverowid']);
+            if ($tablename === 'block_nvq_matrix_status_history') {
+                $table->add_index('studentid-courseid', XMLDB_INDEX_NOTUNIQUE, ['studentid', 'courseid']);
+            } else {
+                $table->add_index('studentid-topicid-courseid', XMLDB_INDEX_NOTUNIQUE, ['studentid', 'topicid', 'courseid']);
+            }
+            $dbman->create_table($table);
+        }
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026090500, 'nvq_matrix');
+    }
     return true;
 }

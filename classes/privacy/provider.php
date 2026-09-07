@@ -104,6 +104,29 @@ class provider implements
             'privacy:metadata:block_nvq_matrix_grades'
         );
 
+        // Real gap fixed proactively here (v26.6.13, added alongside the
+        // audit-trail feature itself rather than found missing later):
+        // each _history table is a straightforward append-only snapshot
+        // of its live counterpart, with the exact same personal-data
+        // shape - covered here from day one instead of repeating this
+        // session's own notified_items lesson.
+        $collection->add_database_table(
+            'block_nvq_matrix_grades_history',
+            [
+                'studentid'    => 'privacy:metadata:block_nvq_matrix_grades:studentid',
+                'topicid'      => 'privacy:metadata:block_nvq_matrix_grades:topicid',
+                'courseid'     => 'privacy:metadata:block_nvq_matrix_grades:courseid',
+                'value'        => 'privacy:metadata:block_nvq_matrix_grades:value',
+                'comment'      => 'privacy:metadata:block_nvq_matrix_grades:comment',
+                'gradedby'     => 'privacy:metadata:block_nvq_matrix_grades:gradedby',
+                'timemodified' => 'privacy:metadata:block_nvq_matrix_grades:timemodified',
+                'commentedby'  => 'privacy:metadata:block_nvq_matrix_grades:commentedby',
+                'commenttime'  => 'privacy:metadata:block_nvq_matrix_grades:commenttime',
+                'archivedtime' => 'privacy:metadata:block_nvq_matrix_history:archivedtime',
+            ],
+            'privacy:metadata:block_nvq_matrix_grades_history'
+        );
+
         $collection->add_database_table(
             'block_nvq_matrix_sampling',
             [
@@ -115,6 +138,20 @@ class provider implements
                 'timemodified' => 'privacy:metadata:block_nvq_matrix_sampling:timemodified',
             ],
             'privacy:metadata:block_nvq_matrix_sampling'
+        );
+
+        $collection->add_database_table(
+            'block_nvq_matrix_sampling_history',
+            [
+                'studentid'    => 'privacy:metadata:block_nvq_matrix_sampling:studentid',
+                'topicid'      => 'privacy:metadata:block_nvq_matrix_sampling:topicid',
+                'courseid'     => 'privacy:metadata:block_nvq_matrix_sampling:courseid',
+                'status'       => 'privacy:metadata:block_nvq_matrix_sampling:status',
+                'sampledby'    => 'privacy:metadata:block_nvq_matrix_sampling:sampledby',
+                'timemodified' => 'privacy:metadata:block_nvq_matrix_sampling:timemodified',
+                'archivedtime' => 'privacy:metadata:block_nvq_matrix_history:archivedtime',
+            ],
+            'privacy:metadata:block_nvq_matrix_sampling_history'
         );
 
         $collection->add_database_table(
@@ -150,6 +187,21 @@ class provider implements
                 'notifiedby'   => 'privacy:metadata:block_nvq_matrix_status:notifiedby',
             ],
             'privacy:metadata:block_nvq_matrix_status'
+        );
+
+        $collection->add_database_table(
+            'block_nvq_matrix_status_history',
+            [
+                'studentid'    => 'privacy:metadata:block_nvq_matrix_status:studentid',
+                'courseid'     => 'privacy:metadata:block_nvq_matrix_status:courseid',
+                'status'       => 'privacy:metadata:block_nvq_matrix_status:status',
+                'setby'        => 'privacy:metadata:block_nvq_matrix_status:setby',
+                'timemodified' => 'privacy:metadata:block_nvq_matrix_status:timemodified',
+                'notifiedtime' => 'privacy:metadata:block_nvq_matrix_status:notifiedtime',
+                'notifiedby'   => 'privacy:metadata:block_nvq_matrix_status:notifiedby',
+                'archivedtime' => 'privacy:metadata:block_nvq_matrix_history:archivedtime',
+            ],
+            'privacy:metadata:block_nvq_matrix_status_history'
         );
 
         // Real gap fixed here (v26.6.3): these two tables store direct
@@ -199,6 +251,23 @@ class provider implements
                 'assessorcommenttime' => 'privacy:metadata:block_nvq_matrix_unit_comments:assessorcommenttime',
             ],
             'privacy:metadata:block_nvq_matrix_unit_comments'
+        );
+
+        $collection->add_database_table(
+            'block_nvq_matrix_unit_comments_history',
+            [
+                'studentid'           => 'privacy:metadata:block_nvq_matrix_unit_comments:studentid',
+                'topicid'             => 'privacy:metadata:block_nvq_matrix_unit_comments:topicid',
+                'courseid'            => 'privacy:metadata:block_nvq_matrix_unit_comments:courseid',
+                'iqacomment'          => 'privacy:metadata:block_nvq_matrix_unit_comments:iqacomment',
+                'iqacommentby'        => 'privacy:metadata:block_nvq_matrix_unit_comments:iqacommentby',
+                'iqacommenttime'      => 'privacy:metadata:block_nvq_matrix_unit_comments:iqacommenttime',
+                'assessorcomment'     => 'privacy:metadata:block_nvq_matrix_unit_comments:assessorcomment',
+                'assessorcommentby'   => 'privacy:metadata:block_nvq_matrix_unit_comments:assessorcommentby',
+                'assessorcommenttime' => 'privacy:metadata:block_nvq_matrix_unit_comments:assessorcommenttime',
+                'archivedtime'        => 'privacy:metadata:block_nvq_matrix_history:archivedtime',
+            ],
+            'privacy:metadata:block_nvq_matrix_unit_comments_history'
         );
 
         // Real gap fixed here (v26.6.9 audit): this table has neither a
@@ -352,6 +421,60 @@ class provider implements
             'userid18'      => $userid,
         ]);
 
+        // Audit-trail history tables (v26.6.13) - same courseid-direct
+        // pattern as their live counterparts above, since each history
+        // table copies courseid/studentid straight from its live row.
+        $contextlist->add_from_sql("
+            SELECT ctx.id
+              FROM {context} ctx
+              JOIN {block_nvq_matrix_grades_history} gh ON gh.courseid = ctx.instanceid
+             WHERE ctx.contextlevel = :contextlevel9
+               AND (gh.studentid = :userid19 OR gh.gradedby = :userid20 OR gh.commentedby = :userid21)
+        ", [
+            'contextlevel9' => CONTEXT_COURSE,
+            'userid19'      => $userid,
+            'userid20'      => $userid,
+            'userid21'      => $userid,
+        ]);
+
+        $contextlist->add_from_sql("
+            SELECT ctx.id
+              FROM {context} ctx
+              JOIN {block_nvq_matrix_sampling_history} sh ON sh.courseid = ctx.instanceid
+             WHERE ctx.contextlevel = :contextlevel10
+               AND (sh.studentid = :userid22 OR sh.sampledby = :userid23)
+        ", [
+            'contextlevel10' => CONTEXT_COURSE,
+            'userid22'       => $userid,
+            'userid23'       => $userid,
+        ]);
+
+        $contextlist->add_from_sql("
+            SELECT ctx.id
+              FROM {context} ctx
+              JOIN {block_nvq_matrix_unit_comments_history} uch ON uch.courseid = ctx.instanceid
+             WHERE ctx.contextlevel = :contextlevel11
+               AND (uch.studentid = :userid24 OR uch.iqacommentby = :userid25 OR uch.assessorcommentby = :userid26)
+        ", [
+            'contextlevel11' => CONTEXT_COURSE,
+            'userid24'       => $userid,
+            'userid25'       => $userid,
+            'userid26'       => $userid,
+        ]);
+
+        $contextlist->add_from_sql("
+            SELECT ctx.id
+              FROM {context} ctx
+              JOIN {block_nvq_matrix_status_history} sth ON sth.courseid = ctx.instanceid
+             WHERE ctx.contextlevel = :contextlevel12
+               AND (sth.studentid = :userid27 OR sth.setby = :userid28 OR sth.notifiedby = :userid29)
+        ", [
+            'contextlevel12' => CONTEXT_COURSE,
+            'userid27'       => $userid,
+            'userid28'       => $userid,
+            'userid29'       => $userid,
+        ]);
+
         return $contextlist;
     }
 
@@ -451,6 +574,50 @@ class provider implements
               FROM {block_nvq_matrix_notified_items} ni
               JOIN {block_exaportitem} i ON i.id = ni.itemid
              WHERE i.courseid = :courseid
+        ", ['courseid' => $courseid]);
+
+        // Audit-trail history tables (v26.6.13).
+        $userlist->add_from_sql('studentid', "
+            SELECT studentid FROM {block_nvq_matrix_grades_history} WHERE courseid = :courseid
+        ", ['courseid' => $courseid]);
+        $userlist->add_from_sql('gradedby', "
+            SELECT gradedby FROM {block_nvq_matrix_grades_history}
+             WHERE courseid = :courseid AND gradedby IS NOT NULL
+        ", ['courseid' => $courseid]);
+        $userlist->add_from_sql('commentedby', "
+            SELECT commentedby FROM {block_nvq_matrix_grades_history}
+             WHERE courseid = :courseid AND commentedby IS NOT NULL
+        ", ['courseid' => $courseid]);
+
+        $userlist->add_from_sql('studentid', "
+            SELECT studentid FROM {block_nvq_matrix_sampling_history} WHERE courseid = :courseid
+        ", ['courseid' => $courseid]);
+        $userlist->add_from_sql('sampledby', "
+            SELECT sampledby FROM {block_nvq_matrix_sampling_history} WHERE courseid = :courseid
+        ", ['courseid' => $courseid]);
+
+        $userlist->add_from_sql('studentid', "
+            SELECT studentid FROM {block_nvq_matrix_unit_comments_history} WHERE courseid = :courseid
+        ", ['courseid' => $courseid]);
+        $userlist->add_from_sql('iqacommentby', "
+            SELECT iqacommentby FROM {block_nvq_matrix_unit_comments_history}
+             WHERE courseid = :courseid AND iqacommentby IS NOT NULL
+        ", ['courseid' => $courseid]);
+        $userlist->add_from_sql('assessorcommentby', "
+            SELECT assessorcommentby FROM {block_nvq_matrix_unit_comments_history}
+             WHERE courseid = :courseid AND assessorcommentby IS NOT NULL
+        ", ['courseid' => $courseid]);
+
+        $userlist->add_from_sql('studentid', "
+            SELECT studentid FROM {block_nvq_matrix_status_history} WHERE courseid = :courseid
+        ", ['courseid' => $courseid]);
+        $userlist->add_from_sql('setby', "
+            SELECT setby FROM {block_nvq_matrix_status_history}
+             WHERE courseid = :courseid AND setby IS NOT NULL
+        ", ['courseid' => $courseid]);
+        $userlist->add_from_sql('notifiedby', "
+            SELECT notifiedby FROM {block_nvq_matrix_status_history}
+             WHERE courseid = :courseid AND notifiedby IS NOT NULL
         ", ['courseid' => $courseid]);
     }
 
@@ -698,6 +865,57 @@ class provider implements
                 );
             }
 
+            // Audit-trail history (v26.6.13) - own data (this user as the
+            // student the historical snapshot is about). Deliberately
+            // compact (no per-field byline formatting the way the live
+            // "current state" export above does) - GDPR export requires
+            // the data be included, not that every historical entry match
+            // the richness of the current-state view.
+            $owngradehistory = $DB->get_records('block_nvq_matrix_grades_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            $ownsamplinghistory = $DB->get_records('block_nvq_matrix_sampling_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            $ownunitcommentshistory = $DB->get_records('block_nvq_matrix_unit_comments_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            $ownstatushistory = $DB->get_records('block_nvq_matrix_status_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            if (!empty($owngradehistory) || !empty($ownsamplinghistory) || !empty($ownunitcommentshistory) || !empty($ownstatushistory)) {
+                $data = (object) [
+                    'gradehistory' => array_values(array_map(function ($h) {
+                        return (object) [
+                            'topicid'      => $h->topicid,
+                            'value'        => $h->value,
+                            'comment'      => $h->comment,
+                            'timemodified' => $h->timemodified ? transform::datetime($h->timemodified) : null,
+                            'archivedtime' => transform::datetime($h->archivedtime),
+                        ];
+                    }, $owngradehistory)),
+                    'samplinghistory' => array_values(array_map(function ($h) {
+                        return (object) [
+                            'topicid'      => $h->topicid,
+                            'status'       => $h->status,
+                            'timemodified' => transform::datetime($h->timemodified),
+                            'archivedtime' => transform::datetime($h->archivedtime),
+                        ];
+                    }, $ownsamplinghistory)),
+                    'unitcommenthistory' => array_values(array_map(function ($h) {
+                        return (object) [
+                            'topicid'         => $h->topicid,
+                            'iqacomment'      => $h->iqacomment,
+                            'assessorcomment' => $h->assessorcomment,
+                            'archivedtime'    => transform::datetime($h->archivedtime),
+                        ];
+                    }, $ownunitcommentshistory)),
+                    'statushistory' => array_values(array_map(function ($h) {
+                        return (object) [
+                            'status'       => $h->status,
+                            'timemodified' => $h->timemodified ? transform::datetime($h->timemodified) : null,
+                            'archivedtime' => transform::datetime($h->archivedtime),
+                        ];
+                    }, $ownstatushistory)),
+                ];
+                writer::with_context($context)->export_data(
+                    array_merge($subcontext, [get_string('privacy:historyentries', 'block_nvq_matrix')]),
+                    $data
+                );
+            }
+
             if (!empty($authoredgrades) || !empty($authoredsampling) || !empty($authoredunitcomments) || !empty($authoredstatus)) {
                 $data = (object) [
                     'grades'   => array_values(array_map(function ($g) {
@@ -736,6 +954,60 @@ class provider implements
                 ];
                 writer::with_context($context)->export_data(
                     array_merge($subcontext, [get_string('privacy:authoredentries', 'block_nvq_matrix')]),
+                    $data
+                );
+            }
+
+            // Audit-trail history (v26.6.13) - authored data (this user as
+            // whoever set the historical grade/sampling/comment/status,
+            // regardless of which student it was about).
+            $authoredgradehistory = $DB->get_records_select('block_nvq_matrix_grades_history',
+                '(gradedby = :userid1 OR commentedby = :userid2) AND courseid = :courseid',
+                ['userid1' => $userid, 'userid2' => $userid, 'courseid' => $courseid]);
+            $authoredsamplinghistory = $DB->get_records('block_nvq_matrix_sampling_history', ['sampledby' => $userid, 'courseid' => $courseid]);
+            $authoredunitcommentshistory = $DB->get_records_select('block_nvq_matrix_unit_comments_history',
+                '(iqacommentby = :userid1 OR assessorcommentby = :userid2) AND courseid = :courseid',
+                ['userid1' => $userid, 'userid2' => $userid, 'courseid' => $courseid]);
+            $authoredstatushistory = $DB->get_records_select('block_nvq_matrix_status_history',
+                '(setby = :userid1 OR notifiedby = :userid2) AND courseid = :courseid',
+                ['userid1' => $userid, 'userid2' => $userid, 'courseid' => $courseid]);
+            if (!empty($authoredgradehistory) || !empty($authoredsamplinghistory) || !empty($authoredunitcommentshistory) || !empty($authoredstatushistory)) {
+                $data = (object) [
+                    'gradehistory' => array_values(array_map(function ($h) {
+                        return (object) [
+                            'studentid'    => $h->studentid,
+                            'topicid'      => $h->topicid,
+                            'value'        => $h->value,
+                            'archivedtime' => transform::datetime($h->archivedtime),
+                        ];
+                    }, $authoredgradehistory)),
+                    'samplinghistory' => array_values(array_map(function ($h) {
+                        return (object) [
+                            'studentid'    => $h->studentid,
+                            'topicid'      => $h->topicid,
+                            'status'       => $h->status,
+                            'archivedtime' => transform::datetime($h->archivedtime),
+                        ];
+                    }, $authoredsamplinghistory)),
+                    'unitcommenthistory' => array_values(array_map(function ($h) {
+                        return (object) [
+                            'studentid'    => $h->studentid,
+                            'topicid'      => $h->topicid,
+                            'archivedtime' => transform::datetime($h->archivedtime),
+                        ];
+                    }, $authoredunitcommentshistory)),
+                    'statushistory' => array_values(array_map(function ($h) {
+                        return (object) [
+                            'studentid'    => $h->studentid,
+                            'archivedtime' => transform::datetime($h->archivedtime),
+                        ];
+                    }, $authoredstatushistory)),
+                ];
+                writer::with_context($context)->export_data(
+                    array_merge($subcontext, [
+                        get_string('privacy:authoredentries', 'block_nvq_matrix'),
+                        get_string('privacy:historyentries', 'block_nvq_matrix'),
+                    ]),
                     $data
                 );
             }
@@ -790,6 +1062,16 @@ class provider implements
         // Real gap fixed here (v26.6.3) - see get_metadata() above.
         $DB->delete_records('block_nvq_matrix_assessor', ['courseid' => $courseid]);
         $DB->delete_records('block_nvq_matrix_cleared_archive', ['courseid' => $courseid]);
+
+        // Audit-trail history tables (v26.6.13) - deleted alongside their
+        // live counterparts for consistency with how every other table in
+        // this method is handled (a whole-course wipe, not a per-user
+        // erasure request, so there's no "authored data survives" nuance
+        // to consider here the way delete_data_for_user() below has).
+        $DB->delete_records('block_nvq_matrix_grades_history', ['courseid' => $courseid]);
+        $DB->delete_records('block_nvq_matrix_sampling_history', ['courseid' => $courseid]);
+        $DB->delete_records('block_nvq_matrix_unit_comments_history', ['courseid' => $courseid]);
+        $DB->delete_records('block_nvq_matrix_status_history', ['courseid' => $courseid]);
 
         // Real gap fixed here (v26.6.9 audit) - see get_metadata() above.
         $DB->execute("
@@ -847,6 +1129,16 @@ class provider implements
             $DB->delete_records('block_nvq_matrix_sampling', ['studentid' => $userid, 'courseid' => $courseid]);
             $DB->delete_records('block_nvq_matrix_unit_comments', ['studentid' => $userid, 'courseid' => $courseid]);
             $DB->delete_records('block_nvq_matrix_status', ['studentid' => $userid, 'courseid' => $courseid]);
+
+            // Audit-trail history tables (v26.6.13) - same subject-only
+            // rule as the live tables above: only history rows where this
+            // user was the STUDENT the entry was about are deleted here,
+            // never rows where they were merely the staff author of a
+            // historical entry about someone else.
+            $DB->delete_records('block_nvq_matrix_grades_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            $DB->delete_records('block_nvq_matrix_sampling_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            $DB->delete_records('block_nvq_matrix_unit_comments_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            $DB->delete_records('block_nvq_matrix_status_history', ['studentid' => $userid, 'courseid' => $courseid]);
 
             $DB->execute("
                 DELETE FROM {block_nvq_matrix_evidence_types}
@@ -910,6 +1202,13 @@ class provider implements
             $DB->delete_records('block_nvq_matrix_sampling', ['studentid' => $userid, 'courseid' => $courseid]);
             $DB->delete_records('block_nvq_matrix_unit_comments', ['studentid' => $userid, 'courseid' => $courseid]);
             $DB->delete_records('block_nvq_matrix_status', ['studentid' => $userid, 'courseid' => $courseid]);
+
+            // Audit-trail history tables (v26.6.13) - same subject-only
+            // rule as the live tables above.
+            $DB->delete_records('block_nvq_matrix_grades_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            $DB->delete_records('block_nvq_matrix_sampling_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            $DB->delete_records('block_nvq_matrix_unit_comments_history', ['studentid' => $userid, 'courseid' => $courseid]);
+            $DB->delete_records('block_nvq_matrix_status_history', ['studentid' => $userid, 'courseid' => $courseid]);
 
             $DB->execute("
                 DELETE FROM {block_nvq_matrix_evidence_types}

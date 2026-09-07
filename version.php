@@ -17,6 +17,50 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.13 (1.20.13) — NEW FEATURE: audit trail for grades, sampling,
+ *   unit comments, and final status. Real gap identified in a full-plugin
+ *   audit (2026-09-04): every save_*()/clear_*() method in matrix_data.php
+ *   overwrote or deleted its live row with no record anywhere of the
+ *   previous value, who set it, or when - this plugin fires no Moodle
+ *   events, so Site Administration > Reports > Logs never captured these
+ *   writes either. For an NVQ Competence Matrix, where IQA/EQA/awarding-
+ *   body sampling can reasonably expect to trace a grading history, this
+ *   was a genuine weakness, not a cosmetic one.
+ *
+ *   Four new append-only history tables added (grades/sampling/
+ *   unit_comments/status, each named _history), one per live table, each
+ *   mirroring its live table's own fields plus liverowid (which live row
+ *   this snapshot belonged to) and archivedtime (when it stopped being
+ *   current). matrix_data::snapshot_history() is called as the first thing
+ *   inside every save/clear method's mutation branch, capturing the OLD
+ *   state before it's overwritten or deleted - covers save_grade(),
+ *   save_grade_comment(), save_sampling(), save_unit_comment(),
+ *   save_final_status(), clear_final_status(), clear_grade() (both its
+ *   delete-outright and update-to-null branches), and
+ *   send_completion_notification() (which updates notifiedtime/notifiedby
+ *   on the status row outside save_final_status() itself).
+ *
+ *   Also wired into delete_archived.php via the new
+ *   matrix_data::snapshot_all_before_permanent_delete(), inside the same
+ *   transaction as the permanent deletes it guards - arguably the single
+ *   most important place for this feature, since that action is
+ *   documented elsewhere in this plugin as irreversible, and without this
+ *   the audit trail would go silent at exactly the moment it matters most.
+ *
+ *   classes/privacy/provider.php extended to cover all four new tables
+ *   from day one (metadata, context resolution, users-in-context, export,
+ *   and all three delete methods, matching the same subject-only-deletion
+ *   rule the live tables already follow) - added proactively alongside
+ *   the feature itself rather than repeating this same session's own
+ *   notified_items lesson.
+ *
+ *   IMPORTANT - this is backend-only. There is currently NO user-facing
+ *   way to view this history anywhere in the plugin's UI - the data is
+ *   being correctly captured from this version onward, but a assessor/
+ *   IQA/EQA cannot yet see it without a direct database query. Building
+ *   an actual history view (matrix.mustache and/or a dedicated page) is
+ *   necessary follow-up work, not yet scoped or built.
+ *
  * v26.6.12 (1.20.12) — REAL BUG: a student unenrolled from a course
  *   BEFORE ever being graded/sampled/commented on - i.e. they only
  *   ever uploaded evidence - was completely invisible to BOTH archive-
@@ -2398,7 +2442,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026090400;
+$plugin->version   = 2026090500;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2413,4 +2457,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.12';
+$plugin->release   = '1.20.13';

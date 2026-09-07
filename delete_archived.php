@@ -123,6 +123,15 @@ if (in_array('companymanager', $callerroleshortnames, true)) {
 try {
     $transaction = $DB->start_delegated_transaction();
 
+    // Snapshots every grade/sampling/unit_comment/status row for this
+    // student+course into its history table BEFORE the deletes below -
+    // see matrix_data::snapshot_all_before_permanent_delete()'s own
+    // docblock for why this matters here specifically. Inside the same
+    // transaction, so a failure partway through the deletes below rolls
+    // this back too rather than leaving orphaned history for data that
+    // (thanks to the rollback) still exists live.
+    \block_nvq_matrix\matrix_data::snapshot_all_before_permanent_delete($studentid, $courseid);
+
     $DB->delete_records('block_nvq_matrix_grades', ['studentid' => $studentid, 'courseid' => $courseid]);
     $DB->delete_records('block_nvq_matrix_sampling', ['studentid' => $studentid, 'courseid' => $courseid]);
     $DB->delete_records('block_nvq_matrix_unit_comments', ['studentid' => $studentid, 'courseid' => $courseid]);

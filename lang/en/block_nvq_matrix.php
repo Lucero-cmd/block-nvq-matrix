@@ -127,6 +127,8 @@ $string['backtodashboard']         = 'Back to dashboard';
 $string['privacy:no_data_reason']  = 'This block displays data from Exabis ePortfolio and Exabis Competence Grid. It does not store any personal data of its own.';
 
 $string['privacy:authoredentries'] = 'Entries you wrote about other students';
+$string['privacy:historyentries'] = 'Grading and status history';
+$string['privacy:metadata:block_nvq_matrix_history:archivedtime'] = 'The date and time this value stopped being current (i.e. was overwritten or deleted).';
 
 $string['privacy:metadata:block_nvq_matrix_grades'] = 'The unit-level assessor grade (Competent / Not Yet Competent) and optional comment recorded for a student against a unit.';
 $string['privacy:metadata:block_nvq_matrix_grades:studentid'] = 'The ID of the student the grade applies to.';

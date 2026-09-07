@@ -988,6 +988,94 @@ class matrix_data {
      * @return void
      * @throws \dml_exception
      */
+    /**
+     * Snapshots a live row into its companion history table, immediately
+     * before it's about to be overwritten. Called as the very first thing
+     * inside every save_*() method's "if ($existing)" branch, before any
+     * field on $oldrecord is mutated - the whole point is capturing the
+     * state as it stood BEFORE this change.
+     *
+     * Added v26.6.13 - see version.php's changelog entry for the full
+     * rationale. Never updates a history row, only ever inserts - a
+     * genuine append-only audit log. $fields lists which properties of
+     * $oldrecord to copy across (liverowid and archivedtime are always
+     * added automatically, not listed by the caller).
+     *
+     * @param string $historytable
+     * @param object $oldrecord The live row as it stood before this change.
+     * @param array $fields Property names to copy from $oldrecord.
+     * @return void
+     */
+    private static function snapshot_history(string $historytable, object $oldrecord, array $fields): void {
+        global $DB;
+
+        $data = (object) [
+            'liverowid'    => $oldrecord->id,
+            'archivedtime' => time(),
+        ];
+        foreach ($fields as $field) {
+            $data->$field = $oldrecord->$field ?? null;
+        }
+        $DB->insert_record($historytable, $data);
+    }
+
+    /**
+     * Snapshots EVERY grade/sampling/unit_comment/status row for a
+     * student+course into their respective history tables, without
+     * touching the live rows at all - called by delete_archived.php
+     * immediately before it permanently deletes this exact data, inside
+     * the same transaction, so the snapshot inserts roll back too if the
+     * delete itself fails partway through.
+     *
+     * Added v26.6.13 alongside the rest of the audit trail feature -
+     * arguably the single most important place for it: delete_archived.php
+     * is explicitly documented elsewhere in this plugin as irreversible,
+     * so without this, the moment of permanent deletion would be the one
+     * place the whole audit trail goes silent right when it matters most.
+     * Unlike the save_*() methods, which snapshot exactly one row each
+     * because only one can ever be "current" per student/topic/course,
+     * this snapshots EVERY topic's row at once (a student can have many
+     * graded/sampled/commented units in one course), which is why this is
+     * its own method rather than reusing snapshot_history() directly in a
+     * loop from the caller.
+     *
+     * @param int $studentid
+     * @param int $courseid
+     * @return void
+     */
+    public static function snapshot_all_before_permanent_delete(int $studentid, int $courseid): void {
+        global $DB;
+
+        $params = ['studentid' => $studentid, 'courseid' => $courseid];
+
+        foreach ($DB->get_records('block_nvq_matrix_grades', $params) as $row) {
+            self::snapshot_history('block_nvq_matrix_grades_history', $row, [
+                'studentid', 'topicid', 'courseid', 'value', 'comment',
+                'gradedby', 'timemodified', 'commentedby', 'commenttime',
+            ]);
+        }
+
+        foreach ($DB->get_records('block_nvq_matrix_sampling', $params) as $row) {
+            self::snapshot_history('block_nvq_matrix_sampling_history', $row, [
+                'studentid', 'topicid', 'courseid', 'status', 'sampledby', 'timemodified',
+            ]);
+        }
+
+        foreach ($DB->get_records('block_nvq_matrix_unit_comments', $params) as $row) {
+            self::snapshot_history('block_nvq_matrix_unit_comments_history', $row, [
+                'studentid', 'topicid', 'courseid',
+                'assessorcomment', 'assessorcommentby', 'assessorcommenttime',
+                'iqacomment', 'iqacommentby', 'iqacommenttime',
+            ]);
+        }
+
+        foreach ($DB->get_records('block_nvq_matrix_status', $params) as $row) {
+            self::snapshot_history('block_nvq_matrix_status_history', $row, [
+                'studentid', 'courseid', 'status', 'setby', 'timemodified', 'notifiedtime', 'notifiedby',
+            ]);
+        }
+    }
+
     public static function save_final_status(int $studentid, int $courseid, int $status, int $setdate = 0): void {
         global $DB, $USER;
 
@@ -1000,6 +1088,9 @@ class matrix_data {
         ]);
 
         if ($existing) {
+            self::snapshot_history('block_nvq_matrix_status_history', $existing, [
+                'studentid', 'courseid', 'status', 'setby', 'timemodified', 'notifiedtime', 'notifiedby',
+            ]);
             $existing->status       = $status;
             $existing->setby        = $USER->id;
             $existing->timemodified = $timemodified;
@@ -1033,6 +1124,17 @@ class matrix_data {
      */
     public static function clear_final_status(int $studentid, int $courseid): void {
         global $DB;
+
+        $existing = $DB->get_record('block_nvq_matrix_status', [
+            'studentid' => $studentid,
+            'courseid'  => $courseid,
+        ]);
+
+        if ($existing) {
+            self::snapshot_history('block_nvq_matrix_status_history', $existing, [
+                'studentid', 'courseid', 'status', 'setby', 'timemodified', 'notifiedtime', 'notifiedby',
+            ]);
+        }
 
         $DB->delete_records('block_nvq_matrix_status', [
             'studentid' => $studentid,
@@ -1112,6 +1214,9 @@ class matrix_data {
 
         message_send($message);
 
+        self::snapshot_history('block_nvq_matrix_status_history', $statusrow, [
+            'studentid', 'courseid', 'status', 'setby', 'timemodified', 'notifiedtime', 'notifiedby',
+        ]);
         $statusrow->notifiedtime = time();
         $statusrow->notifiedby   = $USER->id;
         $DB->update_record('block_nvq_matrix_status', $statusrow);
@@ -1523,6 +1628,10 @@ class matrix_data {
             ];
 
         if ($existing) {
+            self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
+                'studentid', 'topicid', 'courseid', 'value', 'comment',
+                'gradedby', 'timemodified', 'commentedby', 'commenttime',
+            ]);
             $existing->value        = $value;
             $existing->gradedby     = $USER->id;
             $existing->timemodified = $now;
@@ -1591,6 +1700,10 @@ class matrix_data {
         ]);
 
         if ($existing) {
+            self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
+                'studentid', 'topicid', 'courseid', 'value', 'comment',
+                'gradedby', 'timemodified', 'commentedby', 'commenttime',
+            ]);
             foreach ($commentfields as $field => $fieldvalue) {
                 $existing->$field = $fieldvalue;
             }
@@ -1683,6 +1796,9 @@ class matrix_data {
         ]);
 
         if ($existing) {
+            self::snapshot_history('block_nvq_matrix_sampling_history', $existing, [
+                'studentid', 'topicid', 'courseid', 'status', 'sampledby', 'timemodified',
+            ]);
             $existing->status       = $status;
             $existing->timemodified = $now;
             $existing->sampledby    = $USER->id;
@@ -1801,6 +1917,11 @@ class matrix_data {
             ];
 
         if ($existing) {
+            self::snapshot_history('block_nvq_matrix_unit_comments_history', $existing, [
+                'studentid', 'topicid', 'courseid',
+                'assessorcomment', 'assessorcommentby', 'assessorcommenttime',
+                'iqacomment', 'iqacommentby', 'iqacommenttime',
+            ]);
             foreach ($fields as $field => $value) {
                 $existing->$field = $value;
             }
@@ -1915,10 +2036,18 @@ class matrix_data {
         $hascomment = trim((string) ($existing->comment ?? '')) !== '';
 
         if (!$hascomment) {
+            self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
+                'studentid', 'topicid', 'courseid', 'value', 'comment',
+                'gradedby', 'timemodified', 'commentedby', 'commenttime',
+            ]);
             $DB->delete_records('block_nvq_matrix_grades', ['id' => $existing->id]);
             return;
         }
 
+        self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
+            'studentid', 'topicid', 'courseid', 'value', 'comment',
+            'gradedby', 'timemodified', 'commentedby', 'commenttime',
+        ]);
         $existing->value        = null;
         $existing->gradedby     = null;
         $existing->timemodified = null;
