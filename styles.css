@@ -2080,23 +2080,3 @@ a.nvq-dash-tile:hover {
     cursor: default;
 }
 
-.nvq-backdate-audit-wrap {
-    display: flex;
-    align-items: center;
-}
-
-.nvq-backdate-audit-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.72rem;
-    color: var(--nvq-ink-muted);
-    cursor: help;
-    margin-bottom: 0;
-}
-
-.nvq-backdate-audit-checkbox {
-    margin: 0;
-    cursor: pointer;
-}
-

@@ -24,9 +24,15 @@
  * setting here would just be two places to change the same thing) and
  * the popup/email channel split (already user-configurable via each
  * person's own Notification preferences once a message provider is
- * registered, which 'assessorsubmission' is). The two settings here
- * (renotifyonedit, migrationmode) both have no existing Moodle
- * equivalent.
+ * registered, which 'assessorsubmission' is). The one setting here
+ * (renotifyonedit) has no existing Moodle equivalent.
+ *
+ * A second setting, "migrationmode", briefly existed here (v26.6.17 -
+ * v26.6.20) to gate backdatable audit-trail timestamps behind a
+ * site-wide toggle. Removed again in v26.6.21 - client decision
+ * (2026-09-08): simplified back to a flat rule with no setting or
+ * gating at all - see matrix_data::resolve_archivedtime()'s own
+ * docblock.
  *
  * @package   block_nvq_matrix
  * @copyright 2025 Alex D&D Training Ltd
@@ -47,25 +53,5 @@ if ($ADMIN->fulltree) {
         get_string('renotifyonedit', 'block_nvq_matrix'),
         get_string('renotifyonedit_desc', 'block_nvq_matrix'),
         1
-    ));
-
-    // Default 0 (off) - deliberately the opposite default from
-    // renotifyonedit above. This setting relaxes something this
-    // plugin's audit trail otherwise guarantees permanently
-    // (archivedtime is normally never backdatable, for anyone, by
-    // design - see matrix_data::resolve_archivedtime()'s own docblock),
-    // so it must be a deliberate, temporary, admin-visible choice, not
-    // something quietly on by default on every site. Added v26.6.17 for
-    // historical data migration from a previous platform: entering
-    // genuinely old grades (correctly backdated via the existing
-    // comment-date fields) was still stamping every resulting audit
-    // trail entry with today's real date, making migrated data
-    // indistinguishable from a grade actually changed today. Intended
-    // to be switched back off once migration is complete.
-    $settings->add(new admin_setting_configcheckbox(
-        'block_nvq_matrix/migrationmode',
-        get_string('migrationmode', 'block_nvq_matrix'),
-        get_string('migrationmode_desc', 'block_nvq_matrix'),
-        0
     ));
 }

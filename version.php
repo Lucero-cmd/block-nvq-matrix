@@ -17,6 +17,44 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.21 (1.20.21) — Client decision (2026-09-08): the backdatable
+ *   audit-trail mechanism built across v26.6.17-20 (a settings-page
+ *   "Migration mode" toggle, a per-entry checkbox, capability gating
+ *   restricted to Assessor/Manager/admin, and a separate "Changed"
+ *   timestamp shown alongside each history entry) was more complexity
+ *   than needed and wasn't displaying/behaving as expected in practice.
+ *   Simplified drastically:
+ *
+ *   - matrix_data::resolve_archivedtime() reduced to a single flat
+ *     rule with no gating at all: if a date was submitted for this
+ *     save, the audit trail records that date; if not, it records the
+ *     real current time. No settings-page toggle, no per-entry
+ *     checkbox, no capability/role check of any kind - anyone who can
+ *     save this field in the first place can backdate its audit trail
+ *     entry too, exactly by entering a date, the same way every other
+ *     backdatable field in this plugin has always worked.
+ *   - The Migration mode setting removed entirely from settings.php
+ *     (added v26.6.17, removed here) - no longer needed.
+ *   - The four per-field "Also backdate the audit trail" checkboxes
+ *     removed entirely from matrix.mustache and their four AJAX
+ *     endpoints (added v26.6.20, removed here).
+ *   - The separate "Changed DD/MM/YYYY HH:MM" line removed from the
+ *     History display (matrix.mustache's historyMetaLine()) - a
+ *     history entry now shows only "Set by X, DD/MM/YYYY" (the date
+ *     entered), with no second, separate real-edit timestamp alongside
+ *     it. NOTE: this means two edits that happen to use the same
+ *     entered date are now visually indistinguishable in the History
+ *     panel - a deliberate tradeoff for simplicity, not an oversight.
+ *
+ *   The four save methods (save_grade/save_grade_comment/
+ *   save_unit_comment/save_final_status/save_sampling) lost the
+ *   $backdateaudit parameter added in v26.6.20; their four AJAX
+ *   endpoints lost the matching backdateaudit POST param. The
+ *   underlying archivedtime column and the history tables themselves
+ *   (v26.6.13) are unchanged - this is purely a simplification of how
+ *   that one column's value gets decided and displayed, not a schema
+ *   change.
+ *
  * v26.6.20 (1.20.20) — Real gap closed: the settings-page Migration mode
  *   toggle (v26.6.17) was the ONLY way to trigger backdated archivedtime,
  *   which is risky in a different way than the problem it solved - a
@@ -2641,7 +2679,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026091200;
+$plugin->version   = 2026091300;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2656,4 +2694,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.20';
+$plugin->release   = '1.20.21';

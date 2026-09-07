@@ -1009,5 +1009,17 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026091200, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026091300) {
+        // No schema/capability change - release-string/version bump
+        // only. Simplifies the backdatable audit-trail mechanism from
+        // v26.6.17-20 (settings-page toggle + per-entry checkbox +
+        // capability gating + separate "Changed" timestamp) down to a
+        // single flat rule with no gating at all - see version.php's
+        // v26.6.21 entry for the full explanation.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026091300, 'nvq_matrix');
+    }
     return true;
 }

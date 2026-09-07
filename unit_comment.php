@@ -63,9 +63,6 @@ $studentid = required_param('studentid', PARAM_INT);
 $courseid  = required_param('courseid', PARAM_INT);
 $comment   = optional_param('comment', '', PARAM_TEXT);
 $commentdatestr = optional_param('commentdate', '', PARAM_TEXT);
-// Per-entry checkbox (v26.6.20) - see grade.php's own comment on this
-// same param for the full explanation.
-$backdateaudit = optional_param('backdateaudit', 0, PARAM_BOOL);
 
 $response = ['success' => false];
 
@@ -116,7 +113,7 @@ try {
     // backdated comment date), not always "now".
     $commentdate = matrix_data::parse_comment_date($commentdatestr);
     $savedtime = $commentdate > 0 ? $commentdate : time();
-    matrix_data::save_unit_comment($topicid, $studentid, $courseid, $comment, $commentdate, $backdateaudit);
+    matrix_data::save_unit_comment($topicid, $studentid, $courseid, $comment, $commentdate);
     $response['success'] = true;
     $response['message'] = get_string('unitcommentsaved', 'block_nvq_matrix');
     $response['comment'] = $comment;
