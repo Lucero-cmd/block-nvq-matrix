@@ -17,6 +17,29 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.24 (1.20.24) — REAL BUG: a single logical edit in this UI
+ *   frequently decomposes into more than one independent AJAX call -
+ *   e.g. "set a new grade and date" fires a separate save when the
+ *   date/comment field is blurred and another when the grade verdict
+ *   button is clicked. Each call independently snapshots whatever the
+ *   row looked like immediately before it ran, via
+ *   matrix_data::snapshot_history() - if nothing had actually changed
+ *   between two such calls (e.g. the row was already cleared to null
+ *   from a prior action, and stayed null until the second call finally
+ *   set a real value), both calls captured the exact same "before"
+ *   state, producing two back-to-back identical history entries that
+ *   added no new information. Confirmed live on staging (2026-09-08):
+ *   clearing a grade then setting a new one produced two identical
+ *   "Not yet graded" entries instead of one.
+ *
+ *   Fixed inside snapshot_history() itself (so every caller benefits
+ *   without individual changes): before inserting, compares against
+ *   the most recent EXISTING history row for that liverowid - if every
+ *   field would be identical, skips the insert entirely rather than
+ *   recording a duplicate. archivedtime is deliberately excluded from
+ *   the comparison (it's expected to differ, being the timestamp of
+ *   the snapshot event itself, not a content field). No schema change.
+ *
  * v26.6.23 (1.20.23) — REAL BUG: get_unit_history()/get_sampling_
  *   history()/get_status_history() queried their history tables by
  *   studentid+topicid+courseid only, with no awareness of WHICH live
@@ -2728,7 +2751,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026091500;
+$plugin->version   = 2026091600;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2743,4 +2766,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.23';
+$plugin->release   = '1.20.24';

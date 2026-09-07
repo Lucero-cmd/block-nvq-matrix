@@ -1048,6 +1048,27 @@ class matrix_data {
         return $submitteddate > 0 ? $submitteddate : time();
     }
 
+    /**
+     * REAL BUG FIXED HERE (v26.6.24): a single logical edit in this UI
+     * frequently decomposes into more than one independent AJAX call -
+     * e.g. "set a new grade and date" fires a separate save when the
+     * date/comment field is blurred and another when the grade verdict
+     * button is clicked. Each call independently snapshots whatever the
+     * row looked like immediately before it ran - if nothing actually
+     * changed between two such calls (e.g. the row was already cleared
+     * to null from a prior action, and stayed null until the second
+     * call finally set a real value), both calls capture the exact same
+     * "before" state, producing two back-to-back identical history
+     * entries that add no new information. Confirmed live on staging
+     * (2026-09-08): clearing a grade then setting a new one produced
+     * two identical "Not yet graded" entries instead of one, purely
+     * from separate saves for the date and the verdict both firing.
+     *
+     * Fixed by comparing against the most recent EXISTING history row
+     * for this liverowid before inserting - if every field would be
+     * identical, skip the insert entirely rather than record a
+     * duplicate that captures nothing new.
+     */
     private static function snapshot_history(string $historytable, object $oldrecord, array $fields, int $archivedtime): void {
         global $DB;
 
@@ -1058,6 +1079,26 @@ class matrix_data {
         foreach ($fields as $field) {
             $data->$field = $oldrecord->$field ?? null;
         }
+
+        $mostrecent = $DB->get_records($historytable, ['liverowid' => $oldrecord->id], 'archivedtime DESC', '*', 0, 1);
+        if (!empty($mostrecent)) {
+            $last = reset($mostrecent);
+            $identical = true;
+            foreach ($fields as $field) {
+                // Loose comparison deliberately: DB reads can return
+                // numeric strings ('1') where the in-memory value is an
+                // int (1) - a strict compare would treat those as
+                // different and defeat the de-duplication entirely.
+                if ($last->$field != $data->$field) {
+                    $identical = false;
+                    break;
+                }
+            }
+            if ($identical) {
+                return;
+            }
+        }
+
         $DB->insert_record($historytable, $data);
     }
 
