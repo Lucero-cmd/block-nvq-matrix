@@ -17,6 +17,65 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.18 (1.20.18) — Real gap closed: sampling had no backdating
+ *   support at all, unlike every other timestamped field in this
+ *   plugin (grade comment, IQA comment, final status all already had a
+ *   date field) - this became a genuine problem once Migration mode
+ *   (v26.6.17) needed a submitted date to backdate historical sampling
+ *   records against for a previous-platform migration, and there was
+ *   none to give it.
+ *
+ *   sample.php now accepts an optional sampledate (YYYY-MM-DD), parsed
+ *   via the same matrix_data::parse_comment_date() every other
+ *   backdatable field already uses, and passed through to
+ *   save_sampling() (now accepting a $sampledate parameter) to set
+ *   timemodified and feed matrix_data::resolve_archivedtime() exactly
+ *   like save_grade()/save_unit_comment()/save_final_status() already
+ *   do. New date input added to the sampling edit row in
+ *   matrix.mustache, mirroring the grade comment's own date field
+ *   exactly; saveSampling() (JS) reworked to operate on the whole
+ *   .nvq-unit-sample-summary rather than just the dropdown, since
+ *   either the status or the date changing now needs to submit both
+ *   current values together. No schema change - block_nvq_matrix_
+ *   sampling already had a timemodified column, just never
+ *   independently settable until now.
+ *
+ * v26.6.17 (1.20.17) — Two client-requested refinements to the History
+ *   feature (v26.6.16), both prompted by real historical data migration
+ *   from a previous platform:
+ *
+ *   1. New "Migration mode" admin setting (settings.php, off by
+ *      default). archivedtime was previously always the real, genuine
+ *      moment of the overwrite for everyone, permanently - correct
+ *      day-to-day, but a real problem during migration: entering
+ *      genuinely old grades (already correctly backdated via the
+ *      existing comment-date fields) still stamped every resulting
+ *      audit-trail entry with today's real date, making migrated data
+ *      indistinguishable from a grade actually changed today. With
+ *      Migration mode on, matrix_data::resolve_archivedtime() lets
+ *      archivedtime follow that same backdated date instead - but only
+ *      for an Assessor or Manager (block/nvq_matrix:grade) or a site
+ *      admin, never for the 'teacher' archetype (IQA/EQA on this site) -
+ *      client decision (2026-09-08): migration concerns grade data,
+ *      entered by Assessors, not IQA/EQA reviewers. With Migration mode
+ *      off (the default, and the state this should be returned to once
+ *      migration is complete), behaviour is unchanged from v26.6.16 -
+ *      archivedtime is never backdatable for anyone.
+ *
+ *   2. New admin-only "Delete" button per history entry
+ *      (history.php's new action=delete, matrix_data::
+ *      delete_history_entry()). Gated on genuine is_siteadmin() status
+ *      specifically - not :viewall, not manager, not any plugin
+ *      capability - client decision (2026-09-08): editing the audit
+ *      trail itself is sensitive enough that even a Manager shouldn't
+ *      be able to do it. Re-verifies server-side that the targeted row
+ *      genuinely belongs to the claimed student+course before deleting
+ *      anything, matching this plugin's established
+ *      never-trust-a-client-supplied-id rule.
+ *
+ *   No schema change - both features work entirely within the existing
+ *   v26.6.13 history tables.
+ *
  * v26.6.16 (1.20.16) — NEW FEATURE: the first user-facing surface for
  *   the audit trail built in v26.6.13. Until now the four history
  *   tables were captured correctly but genuinely invisible - nobody
@@ -2533,7 +2592,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026090800;
+$plugin->version   = 2026091000;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2548,4 +2607,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.16';
+$plugin->release   = '1.20.18';

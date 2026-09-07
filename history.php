@@ -20,23 +20,29 @@
  * (classes/privacy/provider.php's own tables were the backend; this is
  * where an assessor/IQA/EQA/manager actually reads it).
  *
- * Two actions:
+ * Three actions:
  *   - action=unit    : one unit's grade-verdict/comment history AND
  *                       sampling history together (topicid required).
  *   - action=status   : one course's final Pass/Fail status history
  *                        (no topicid - status is course-level, not
  *                        per-unit).
+ *   - action=delete   : permanently deletes ONE specific history row.
+ *                        Gated on genuine site admin status
+ *                        (is_siteadmin()), not :viewall, not manager -
+ *                        client decision (2026-09-08): editing the
+ *                        audit trail itself is sensitive enough that
+ *                        even a Manager shouldn't be able to do it.
  *
- * Gated on block/nvq_matrix:viewall - deliberately the same capability
- * that already governs staff-side visibility of the live matrix, not a
- * narrower per-field capability (:grade/:sample/:iqacomment) - history
- * is read-only, and anyone who can already see a student's current
- * verdicts should be able to see how they got there. Deliberately does
- * NOT require is_enrolled() on the target student the way grade.php/
- * sample.php do for their write actions - unlike those, this is
- * read-only, and one of the most useful cases for checking history is
- * exactly an already-archived (unenrolled) student, so requiring active
- * enrolment here would defeat the point.
+ * unit/status are gated on block/nvq_matrix:viewall - deliberately the
+ * same capability that already governs staff-side visibility of the
+ * live matrix, not a narrower per-field capability (:grade/:sample/
+ * :iqacomment) - history is read-only, and anyone who can already see a
+ * student's current verdicts should be able to see how they got there.
+ * Deliberately does NOT require is_enrolled() on the target student the
+ * way grade.php/sample.php do for their write actions - unlike those,
+ * this is read-only, and one of the most useful cases for checking
+ * history is exactly an already-archived (unenrolled) student, so
+ * requiring active enrolment here would defeat the point.
  *
  * Not exposed to the student viewing their own matrix - this endpoint
  * has no "is this the student's own data" branch at all, unlike
@@ -66,14 +72,14 @@ try {
     die();
 }
 
-$action    = required_param('action', PARAM_ALPHA); // 'unit' | 'status'
+$action    = required_param('action', PARAM_ALPHA); // 'unit' | 'status' | 'delete'
 $studentid = required_param('studentid', PARAM_INT);
 $courseid  = required_param('courseid', PARAM_INT);
 $topicid   = optional_param('topicid', 0, PARAM_INT);
 
 $response = ['success' => false];
 
-if (!in_array($action, ['unit', 'status'], true) || $studentid <= 0 || $courseid <= 0) {
+if (!in_array($action, ['unit', 'status', 'delete'], true) || $studentid <= 0 || $courseid <= 0) {
     $response['error'] = get_string('historyerror', 'block_nvq_matrix');
     echo json_encode($response);
     die();
@@ -86,6 +92,40 @@ if ($action === 'unit' && $topicid <= 0) {
 }
 
 global $DB;
+
+// action=delete has its own, stricter gate (genuine site admin only) -
+// handled entirely separately from the unit/status read actions below,
+// since it doesn't need the topic/courseid validation those two do.
+if ($action === 'delete') {
+    if (!is_siteadmin()) {
+        http_response_code(403);
+        $response['error'] = get_string('historynopermission', 'block_nvq_matrix');
+        echo json_encode($response);
+        die();
+    }
+
+    $historytype = required_param('historytype', PARAM_ALPHA); // 'grade' | 'sampling' | 'unitcomment' | 'status'
+    $historyid   = required_param('historyid', PARAM_INT);
+
+    if ($historyid <= 0 || !in_array($historytype, ['grade', 'sampling', 'unitcomment', 'status'], true)) {
+        $response['error'] = get_string('historyerror', 'block_nvq_matrix');
+        echo json_encode($response);
+        die();
+    }
+
+    try {
+        $deleted = matrix_data::delete_history_entry($historytype, $historyid, $studentid, $courseid);
+        $response['success'] = $deleted;
+        if (!$deleted) {
+            $response['error'] = get_string('historyerror', 'block_nvq_matrix');
+        }
+    } catch (\Throwable $e) {
+        $response['error'] = get_string('historyerror', 'block_nvq_matrix');
+    }
+
+    echo json_encode($response);
+    die();
+}
 
 // Check 1 — for action=unit, courseid genuinely belongs to this topic,
 // same pattern grade.php/sample.php already use.

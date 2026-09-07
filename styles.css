@@ -2056,3 +2056,27 @@ a.nvq-dash-tile:hover {
     color: var(--nvq-danger);
 }
 
+.nvq-history-delete-btn {
+    display: inline-block;
+    margin-top: 0.3rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--nvq-radius-sm);
+    border: 1px solid var(--nvq-danger);
+    background-color: transparent;
+    color: var(--nvq-danger);
+    cursor: pointer;
+    transition: all 0.15s var(--nvq-ease);
+}
+
+.nvq-history-delete-btn:hover {
+    background-color: var(--nvq-danger);
+    color: #fff;
+}
+
+.nvq-history-delete-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+

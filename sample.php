@@ -17,7 +17,14 @@
 /**
  * AJAX endpoint for saving a unit-level sampling status in the NVQ matrix.
  *
- * Accepts a POST with topicid, studentid, courseid, status (0/1/2).
+ * Accepts a POST with topicid, studentid, courseid, status (0/1/2), and an
+ * optional sampledate (YYYY-MM-DD) to backdate the "sampled on" date - same
+ * pattern as the grade/IQA/evidence comment date fields, and previously
+ * missing here (v26.6.18): sampling had no backdating support at all,
+ * unlike every other timestamped field in this plugin, which became a real
+ * gap once Migration mode (v26.6.17) needed a submitted date to backdate
+ * against for historical sampling records from a previous platform.
+ *
  * Gated on block/nvq_matrix:sample specifically — NOT the same as grading's
  * block/nvq_matrix:viewall. This capability is deliberately withheld from
  * the 'teacher' archetype (used for non-editing EQA/IQA reviewers), who may
@@ -44,10 +51,11 @@ try {
     die();
 }
 
-$topicid   = required_param('topicid', PARAM_INT);
-$studentid = required_param('studentid', PARAM_INT);
-$courseid  = required_param('courseid', PARAM_INT);
-$status    = required_param('status', PARAM_INT);
+$topicid       = required_param('topicid', PARAM_INT);
+$studentid     = required_param('studentid', PARAM_INT);
+$courseid      = required_param('courseid', PARAM_INT);
+$status        = required_param('status', PARAM_INT);
+$sampledatestr = optional_param('sampledate', '', PARAM_TEXT);
 
 $response = ['success' => false];
 
@@ -93,7 +101,8 @@ if (!$coursecontext
 }
 
 try {
-    matrix_data::save_sampling($topicid, $studentid, $courseid, $status);
+    $sampledate = matrix_data::parse_comment_date($sampledatestr);
+    matrix_data::save_sampling($topicid, $studentid, $courseid, $status, $sampledate);
     $response['success'] = true;
     $response['message'] = get_string('samplingsaved', 'block_nvq_matrix');
 } catch (\Throwable $e) {

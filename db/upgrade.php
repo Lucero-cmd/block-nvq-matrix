@@ -961,5 +961,30 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026090800, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026090900) {
+        // No schema/capability change - release-string/version bump
+        // only. Adds Migration mode (settings.php, backdatable
+        // archivedtime for Assessor/Manager/admin only) and an
+        // admin-only Delete button per history entry (history.php's
+        // new action=delete). See version.php's v26.6.17 entry for the
+        // full explanation.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026090900, 'nvq_matrix');
+    }
+
+    if ($oldversion < 2026091000) {
+        // No schema/capability change - release-string/version bump
+        // only. Adds backdating support to sampling (sample.php's new
+        // sampledate param, save_sampling()'s new $sampledate
+        // parameter), closing the gap flagged when Migration mode
+        // (v26.6.17) was built - sampling had no date field to backdate
+        // against at all until now. See version.php's v26.6.18 entry
+        // for the full explanation.
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026091000, 'nvq_matrix');
+    }
     return true;
 }

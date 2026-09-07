@@ -12,7 +12,7 @@
     @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 }}
 
-<div class="block-nvq-matrix" data-gradeurl="{{gradeurl}}" data-sampleurl="{{sampleurl}}" data-unitcommenturl="{{unitcommenturl}}" data-historyurl="{{historyurl}}" data-sesskey="{{sesskey}}">
+<div class="block-nvq-matrix" data-gradeurl="{{gradeurl}}" data-sampleurl="{{sampleurl}}" data-unitcommenturl="{{unitcommenturl}}" data-historyurl="{{historyurl}}" data-issiteadmin="{{issiteadmin}}" data-sesskey="{{sesskey}}">
 
     {{#caneditanything}}
     {{! Single global toggle: everything that's editable (comments,
@@ -512,6 +512,12 @@
                         <option value="1" {{#issampled}}selected{{/issampled}}>{{#str}}sampled, block_nvq_matrix{{/str}}</option>
                         <option value="2" {{#isnotyetsampled}}selected{{/isnotyetsampled}}>{{#str}}notyetsampled, block_nvq_matrix{{/str}}</option>
                     </select>
+                    <div class="nvq-comment-date-wrap mt-1">
+                        <label class="nvq-comment-date-label">{{#str}}sampledate, block_nvq_matrix{{/str}}</label>
+                        <input type="date" class="nvq-comment-date-input nvq-sample-date form-control form-control-sm"
+                               value="{{sampledateiso}}"
+                               title="{{#str}}sampledatehelp, block_nvq_matrix{{/str}}">
+                    </div>
                     <div class="nvq-sample-status mt-1" aria-live="polite"></div>
                 </div>
                 {{/cansample}}
@@ -593,7 +599,10 @@
                      data-changedonprefix="{{#str}}historychangedonprefix, block_nvq_matrix{{/str}}"
                      data-gradelabel="{{#str}}historygradelabel, block_nvq_matrix{{/str}}"
                      data-samplinglabel="{{#str}}historysamplinglabel, block_nvq_matrix{{/str}}"
-                     data-commentlabel="{{#str}}historyunitcommentlabel, block_nvq_matrix{{/str}}"></div>
+                     data-commentlabel="{{#str}}historyunitcommentlabel, block_nvq_matrix{{/str}}"
+                     data-deletebtntext="{{#str}}historydeletebtn, block_nvq_matrix{{/str}}"
+                     data-deleteconfirmtext="{{#str}}historydeleteconfirm, block_nvq_matrix{{/str}}"
+                     data-deleteerrortext="{{#str}}historydeleteerror, block_nvq_matrix{{/str}}"></div>
             </div>
             {{/canviewall}}
 
@@ -697,7 +706,10 @@
                  data-loadingtext="{{#str}}loading, moodle{{/str}}"
                  data-nonetext="{{#str}}historynone, block_nvq_matrix{{/str}}"
                  data-errortext="{{#str}}historyerror, block_nvq_matrix{{/str}}"
-                 data-changedonprefix="{{#str}}historychangedonprefix, block_nvq_matrix{{/str}}"></div>
+                 data-changedonprefix="{{#str}}historychangedonprefix, block_nvq_matrix{{/str}}"
+                 data-deletebtntext="{{#str}}historydeletebtn, block_nvq_matrix{{/str}}"
+                 data-deleteconfirmtext="{{#str}}historydeleteconfirm, block_nvq_matrix{{/str}}"
+                 data-deleteerrortext="{{#str}}historydeleteerror, block_nvq_matrix{{/str}}"></div>
         </div>
         {{/canviewall}}
     </div>
@@ -1166,6 +1178,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
 
         initStudentPicker(matrix);
         initHistoryToggles(matrix);
+        initHistoryDelete(matrix);
 
         matrix.addEventListener('click', function (e) {
             var btn = e.target.closest('.nvq-grade-btn');
@@ -1301,10 +1314,16 @@ function nvqToggleGapMode(matrix, toggleBtn) {
             }
         }, true);
 
-        // Sampling dropdown — save immediately on change, no confirmation needed.
+        // Sampling dropdown and date — save immediately on change, no
+        // confirmation needed. Both trigger the same saveSampling(),
+        // which reads whichever value is currently set in the other
+        // field too, so editing just the date (without touching the
+        // dropdown) still submits the current status alongside it, and
+        // vice versa.
         matrix.addEventListener('change', function (e) {
-            if (e.target.classList.contains('nvq-sample-select')) {
-                saveSampling(e.target);
+            if (e.target.classList.contains('nvq-sample-select') || e.target.classList.contains('nvq-sample-date')) {
+                var samplesummary = e.target.closest('.nvq-unit-sample-summary');
+                if (samplesummary) { saveSampling(samplesummary); }
                 return;
             }
             if (e.target.classList.contains('nvq-evidencetype-checkbox')) {
@@ -2263,17 +2282,24 @@ function nvqToggleGapMode(matrix, toggleBtn) {
     }
 
     /**
-     * Saves the unit-level sampling status dropdown.
+     * Saves the unit-level sampling status and its date together -
+     * takes the whole .nvq-unit-sample-summary rather than just the
+     * select, since either the dropdown or the date input changing
+     * needs to submit both current values together (mirrors how
+     * saveGrade() already submits the verdict and comment/date
+     * together, rather than treating them as independent saves).
      */
-    function saveSampling(select) {
-        var summary   = select.closest('.nvq-unit-sample-summary');
-        if (!summary) { return; }
+    function saveSampling(summary) {
+        var select    = summary.querySelector('.nvq-sample-select');
+        var dateinput = summary.querySelector('.nvq-sample-date');
+        if (!select) { return; }
 
-        var topicid   = parseInt(summary.dataset.topicid, 10);
-        var studentid = parseInt(summary.dataset.studentid, 10);
-        var courseid  = parseInt(summary.dataset.courseid, 10);
-        var status    = parseInt(select.value, 10);
-        var statusEl  = summary.querySelector('.nvq-sample-status');
+        var topicid    = parseInt(summary.dataset.topicid, 10);
+        var studentid  = parseInt(summary.dataset.studentid, 10);
+        var courseid   = parseInt(summary.dataset.courseid, 10);
+        var status     = parseInt(select.value, 10);
+        var sampledate = dateinput ? (dateinput.value || '') : '';
+        var statusEl   = summary.querySelector('.nvq-sample-status');
 
         var matrix     = summary.closest('.block-nvq-matrix');
         var sampleurl  = matrix ? matrix.dataset.sampleurl : '';
@@ -2282,6 +2308,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         if (!sampleurl || !courseid) { return; }
 
         select.disabled = true;
+        if (dateinput) { dateinput.disabled = true; }
 
         if (statusEl) {
             statusEl.textContent = '';
@@ -2289,11 +2316,12 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         }
 
         var body = new URLSearchParams({
-            topicid   : topicid,
-            studentid : studentid,
-            courseid  : courseid,
-            status    : status,
-            sesskey   : sesskey,
+            topicid    : topicid,
+            studentid  : studentid,
+            courseid   : courseid,
+            status     : status,
+            sampledate : sampledate,
+            sesskey    : sesskey,
         });
 
         fetch(sampleurl, {
@@ -2327,6 +2355,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         })
         .finally(function () {
             select.disabled = false;
+            if (dateinput) { dateinput.disabled = false; }
         });
     }
 
@@ -2456,7 +2485,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
                 return;
             }
             wrap.dataset.loaded = '1';
-            panel.innerHTML = topicid ? renderUnitHistory(data, panel) : renderStatusHistory(data, panel);
+            panel.innerHTML = topicid ? renderUnitHistory(data, matrix, wrap, panel) : renderStatusHistory(data, matrix, wrap, panel);
         })
         .catch(function () {
             panel.innerHTML = '<div class="nvq-history-error">' + escapeHtml(panel.dataset.errortext) + '</div>';
@@ -2468,6 +2497,21 @@ function nvqToggleGapMode(matrix, toggleBtn) {
     }
 
     /**
+     * Renders the admin-only Delete button for one history entry, or an
+     * empty string for everyone else. issiteadmin is read from the
+     * matrix container's own data attribute (server-rendered from
+     * is_siteadmin(), see matrix_data.php) - deliberately checked again
+     * server-side too (history.php's action=delete requires
+     * is_siteadmin() independently), since this client-side check is
+     * only ever a display convenience, never the real gate.
+     */
+    function historyDeleteButton(matrix, wrap, panel, historytype, historyid) {
+        if (matrix.dataset.issiteadmin !== '1') { return ''; }
+        return '<button type="button" class="nvq-history-delete-btn" data-historytype="' + escapeHtml(historytype)
+            + '" data-historyid="' + escapeHtml(historyid) + '">' + escapeHtml(panel.dataset.deletebtntext) + '</button>';
+    }
+
+    /**
      * One labelled section per field (Grade / Sampling / IQA comment),
      * each its own independent chronological list - deliberately not
      * merged into one interleaved timeline, since they're three
@@ -2475,7 +2519,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
      * live matrix (:grade / :sample / :iqacomment), and merging them
      * would obscure which field a given entry actually belongs to.
      */
-    function renderUnitHistory(data, panel) {
+    function renderUnitHistory(data, matrix, wrap, panel) {
         var html = '';
 
         html += '<div class="nvq-history-section"><div class="nvq-history-section-title">' + escapeHtml(panel.dataset.gradelabel) + '</div>';
@@ -2485,6 +2529,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
                     + '<span class="nvq-history-entry-value">' + escapeHtml(row.valuetext) + '</span>'
                     + (row.comment ? '<div class="nvq-history-entry-comment">' + escapeHtml(row.comment) + '</div>' : '')
                     + historyMetaLine(row, panel)
+                    + historyDeleteButton(matrix, wrap, panel, 'grade', row.id)
                     + '</div>';
             });
         } else {
@@ -2498,6 +2543,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
                 html += '<div class="nvq-history-entry">'
                     + '<span class="nvq-history-entry-value">' + escapeHtml(row.statustext) + '</span>'
                     + historyMetaLine(row, panel)
+                    + historyDeleteButton(matrix, wrap, panel, 'sampling', row.id)
                     + '</div>';
             });
         } else {
@@ -2511,6 +2557,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
                 html += '<div class="nvq-history-entry">'
                     + '<div class="nvq-history-entry-comment">' + escapeHtml(row.comment) + '</div>'
                     + historyMetaLine(row, panel)
+                    + historyDeleteButton(matrix, wrap, panel, 'unitcomment', row.id)
                     + '</div>';
             });
         } else {
@@ -2521,7 +2568,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
         return html;
     }
 
-    function renderStatusHistory(data, panel) {
+    function renderStatusHistory(data, matrix, wrap, panel) {
         if (!data.status.length) {
             return historyEmptyRow(panel);
         }
@@ -2531,6 +2578,7 @@ function nvqToggleGapMode(matrix, toggleBtn) {
                 + '<span class="nvq-history-entry-value">' + escapeHtml(row.statustext) + '</span>'
                 + (row.notifiedtext ? '<div class="nvq-history-entry-comment">' + escapeHtml(row.notifiedtext) + '</div>' : '')
                 + historyMetaLine(row, panel)
+                + historyDeleteButton(matrix, wrap, panel, 'status', row.id)
                 + '</div>';
         });
         return html;
@@ -2541,13 +2589,80 @@ function nvqToggleGapMode(matrix, toggleBtn) {
      * shared by every history entry type. settime is when THIS value
      * was originally set (mirrors format_comment_byline()'s own "Name,
      * date" convention elsewhere in this plugin); archivedtime is
-     * always the real moment it stopped being current, per
-     * matrix_data::snapshot_history()'s own docblock.
+     * always the real moment it stopped being current (or, with
+     * Migration mode on, the same backdated date deliberately used
+     * instead - see matrix_data::resolve_archivedtime()'s own
+     * docblock).
      */
     function historyMetaLine(row, panel) {
         var setpart = row.setby ? (escapeHtml(row.setby) + (row.settime ? ', ' + escapeHtml(row.settime) : '')) : '';
         var changedpart = escapeHtml(panel.dataset.changedonprefix) + ' ' + escapeHtml(row.archivedtime);
         return '<div class="nvq-history-entry-meta">' + setpart + (setpart ? ' — ' : '') + changedpart + '</div>';
+    }
+
+    /**
+     * Deletes one specific history entry - delegated on the matrix
+     * container, matching every other click handler in this file, since
+     * .nvq-history-delete-btn is only ever created dynamically inside
+     * an innerHTML render (never present in the server-rendered page),
+     * so a plain non-delegated listener could never reach it.
+     *
+     * The real permission gate is server-side (history.php's
+     * action=delete requires is_siteadmin() independently) - this
+     * button only ever RENDERS for a site admin in the first place (see
+     * historyDeleteButton() above), so reaching this handler at all
+     * already implies that, but the confirm() dialog and the request
+     * itself are still worth keeping deliberately simple and explicit
+     * given how destructive this action is.
+     */
+    function initHistoryDelete(matrix) {
+        matrix.addEventListener('click', function (e) {
+            var btn = e.target.closest('.nvq-history-delete-btn');
+            if (!btn || btn.disabled) { return; }
+
+            var entry = btn.closest('.nvq-history-entry');
+            var panel = btn.closest('.nvq-history-panel');
+            var wrap  = btn.closest('.nvq-history-wrap');
+            if (!entry || !panel || !wrap) { return; }
+
+            if (!window.confirm(panel.dataset.deleteconfirmtext)) { return; }
+
+            var historyurl = matrix.dataset.historyurl;
+            var sesskey    = matrix.dataset.sesskey;
+            var studentid  = wrap.dataset.studentid;
+            var courseid   = wrap.dataset.courseid;
+
+            btn.disabled = true;
+
+            var body = new URLSearchParams({
+                action      : 'delete',
+                historytype : btn.dataset.historytype,
+                historyid   : btn.dataset.historyid,
+                studentid   : studentid,
+                courseid    : courseid,
+                sesskey     : sesskey,
+            });
+
+            fetch(historyurl, {
+                method      : 'POST',
+                credentials : 'same-origin',
+                headers     : { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body        : body.toString(),
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    entry.remove();
+                } else {
+                    window.alert(data.error || panel.dataset.deleteerrortext);
+                    btn.disabled = false;
+                }
+            })
+            .catch(function () {
+                window.alert(panel.dataset.deleteerrortext);
+                btn.disabled = false;
+            });
+        });
     }
 
     /**

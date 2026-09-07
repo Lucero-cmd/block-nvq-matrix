@@ -93,6 +93,7 @@ class matrix_data {
         if ($canviewall && $studentid === 0) {
             return [
                 'canviewall'    => $canviewall,
+                'issiteadmin'   => is_siteadmin() ? 1 : 0,
                 'cangrade'      => $cangrade,
                 'cansample'     => $cansample,
                 'canfinalstatus' => $canfinalstatus,
@@ -155,6 +156,7 @@ class matrix_data {
         if (empty($topicids)) {
             return [
                 'canviewall'    => $canviewall,
+                'issiteadmin'   => is_siteadmin() ? 1 : 0,
                 'cangrade'      => $cangrade,
                 'cansample'     => $cansample,
                 'canfinalstatus' => $canfinalstatus,
@@ -844,6 +846,7 @@ class matrix_data {
 
         return [
             'canviewall'    => $canviewall,
+                'issiteadmin'   => is_siteadmin() ? 1 : 0,
             'cangrade'      => $cangrade,
             'cansample'     => $cansample,
             'caniqacomment'      => $caniqacomment,
@@ -1016,12 +1019,65 @@ class matrix_data {
      * @param array $fields Property names to copy from $oldrecord.
      * @return void
      */
-    private static function snapshot_history(string $historytable, object $oldrecord, array $fields): void {
+    /**
+     * Decides what archivedtime a history snapshot should actually use
+     * for this particular save action - either the genuine, real,
+     * untamperable current time (the default, and the only behaviour
+     * once "Migration mode" is off), or the SAME backdated date already
+     * being submitted for this save's own timemodified/commenttime, but
+     * ONLY while "Migration mode" (settings.php) is switched on AND the
+     * person saving holds block/nvq_matrix:grade in this course
+     * (editingteacher/manager - the Assessor archetype on this site) or
+     * is a genuine site admin.
+     *
+     * Added v26.6.17 in direct response to a real problem found during
+     * historical data migration from a previous platform: entering
+     * genuinely old grades/comments (each correctly backdated via the
+     * existing commentdate field) still stamped every resulting history
+     * row's archivedtime with the real moment of migration data entry,
+     * making migrated data indistinguishable from someone actually
+     * changing a grade today. archivedtime remains permanently
+     * non-backdatable for everyone once Migration mode is off - the
+     * setting exists to be switched off again once migration is
+     * complete, restoring the "one timestamp nobody can fake" guarantee
+     * for all future day-to-day grading.
+     *
+     * Deliberately scoped to editingteacher/manager/admin only, not the
+     * 'teacher' archetype (IQA/EQA on this site) - client decision
+     * (2026-09-08): migration concerns grade data, entered by
+     * Assessors, not IQA/EQA reviewers. Reuses :grade rather than
+     * inventing a new capability, since that's already exactly the
+     * archetype split this plugin relies on everywhere else.
+     *
+     * @param int $courseid
+     * @param int $submitteddate A parsed backdated date (from
+     *                            parse_comment_date()), or 0 if none was
+     *                            submitted.
+     * @return int The archivedtime to use.
+     */
+    private static function resolve_archivedtime(int $courseid, int $submitteddate): int {
+        if ($submitteddate <= 0 || !get_config('block_nvq_matrix', 'migrationmode')) {
+            return time();
+        }
+
+        if (is_siteadmin()) {
+            return $submitteddate;
+        }
+
+        $coursecontext = \context_course::instance($courseid, IGNORE_MISSING);
+        if ($coursecontext && has_capability('block/nvq_matrix:grade', $coursecontext)) {
+            return $submitteddate;
+        }
+
+        return time();
+    }
+
+    private static function snapshot_history(string $historytable, object $oldrecord, array $fields, int $archivedtime): void {
         global $DB;
 
         $data = (object) [
             'liverowid'    => $oldrecord->id,
-            'archivedtime' => time(),
+            'archivedtime' => $archivedtime,
         ];
         foreach ($fields as $field) {
             $data->$field = $oldrecord->$field ?? null;
@@ -1056,19 +1112,24 @@ class matrix_data {
     public static function snapshot_all_before_permanent_delete(int $studentid, int $courseid): void {
         global $DB;
 
+        // Always real-time here, regardless of Migration mode - a
+        // permanent deletion has no "submitted date" concept to backdate
+        // against (unlike a save/edit), so resolve_archivedtime() is
+        // never called for this method.
+        $now = time();
         $params = ['studentid' => $studentid, 'courseid' => $courseid];
 
         foreach ($DB->get_records('block_nvq_matrix_grades', $params) as $row) {
             self::snapshot_history('block_nvq_matrix_grades_history', $row, [
                 'studentid', 'topicid', 'courseid', 'value', 'comment',
                 'gradedby', 'timemodified', 'commentedby', 'commenttime',
-            ]);
+            ], $now);
         }
 
         foreach ($DB->get_records('block_nvq_matrix_sampling', $params) as $row) {
             self::snapshot_history('block_nvq_matrix_sampling_history', $row, [
                 'studentid', 'topicid', 'courseid', 'status', 'sampledby', 'timemodified',
-            ]);
+            ], $now);
         }
 
         foreach ($DB->get_records('block_nvq_matrix_unit_comments', $params) as $row) {
@@ -1076,13 +1137,13 @@ class matrix_data {
                 'studentid', 'topicid', 'courseid',
                 'assessorcomment', 'assessorcommentby', 'assessorcommenttime',
                 'iqacomment', 'iqacommentby', 'iqacommenttime',
-            ]);
+            ], $now);
         }
 
         foreach ($DB->get_records('block_nvq_matrix_status', $params) as $row) {
             self::snapshot_history('block_nvq_matrix_status_history', $row, [
                 'studentid', 'courseid', 'status', 'setby', 'timemodified', 'notifiedtime', 'notifiedby',
-            ]);
+            ], $now);
         }
     }
 
@@ -1100,7 +1161,7 @@ class matrix_data {
         if ($existing) {
             self::snapshot_history('block_nvq_matrix_status_history', $existing, [
                 'studentid', 'courseid', 'status', 'setby', 'timemodified', 'notifiedtime', 'notifiedby',
-            ]);
+            ], self::resolve_archivedtime($courseid, $setdate));
             $existing->status       = $status;
             $existing->setby        = $USER->id;
             $existing->timemodified = $timemodified;
@@ -1143,7 +1204,7 @@ class matrix_data {
         if ($existing) {
             self::snapshot_history('block_nvq_matrix_status_history', $existing, [
                 'studentid', 'courseid', 'status', 'setby', 'timemodified', 'notifiedtime', 'notifiedby',
-            ]);
+            ], time());
         }
 
         $DB->delete_records('block_nvq_matrix_status', [
@@ -1226,7 +1287,7 @@ class matrix_data {
 
         self::snapshot_history('block_nvq_matrix_status_history', $statusrow, [
             'studentid', 'courseid', 'status', 'setby', 'timemodified', 'notifiedtime', 'notifiedby',
-        ]);
+        ], time());
         $statusrow->notifiedtime = time();
         $statusrow->notifiedby   = $USER->id;
         $DB->update_record('block_nvq_matrix_status', $statusrow);
@@ -1641,7 +1702,7 @@ class matrix_data {
             self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
                 'studentid', 'topicid', 'courseid', 'value', 'comment',
                 'gradedby', 'timemodified', 'commentedby', 'commenttime',
-            ]);
+            ], self::resolve_archivedtime($courseid, $commentdate));
             $existing->value        = $value;
             $existing->gradedby     = $USER->id;
             $existing->timemodified = $now;
@@ -1713,7 +1774,7 @@ class matrix_data {
             self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
                 'studentid', 'topicid', 'courseid', 'value', 'comment',
                 'gradedby', 'timemodified', 'commentedby', 'commenttime',
-            ]);
+            ], self::resolve_archivedtime($courseid, $commentdate));
             foreach ($commentfields as $field => $fieldvalue) {
                 $existing->$field = $fieldvalue;
             }
@@ -1771,6 +1832,7 @@ class matrix_data {
             'isblanksample'    => $status === 0,
             'samplestatustext' => $statustext,
             'sampleurl'        => $sampleurl,
+            'sampledateiso'    => self::format_comment_date_iso($samplerow->timemodified ?? 0),
         ];
     }
 
@@ -1793,11 +1855,13 @@ class matrix_data {
         int $topicid,
         int $studentid,
         int $courseid,
-        int $status
+        int $status,
+        int $sampledate = 0
     ): void {
         global $DB, $USER;
 
         $now = time();
+        $timemodified = $sampledate > 0 ? $sampledate : $now;
 
         $existing = $DB->get_record('block_nvq_matrix_sampling', [
             'studentid' => $studentid,
@@ -1808,9 +1872,9 @@ class matrix_data {
         if ($existing) {
             self::snapshot_history('block_nvq_matrix_sampling_history', $existing, [
                 'studentid', 'topicid', 'courseid', 'status', 'sampledby', 'timemodified',
-            ]);
+            ], self::resolve_archivedtime($courseid, $sampledate));
             $existing->status       = $status;
-            $existing->timemodified = $now;
+            $existing->timemodified = $timemodified;
             $existing->sampledby    = $USER->id;
             $DB->update_record('block_nvq_matrix_sampling', $existing);
         } else {
@@ -1820,7 +1884,7 @@ class matrix_data {
                 'courseid'     => $courseid,
                 'status'       => $status,
                 'sampledby'    => $USER->id,
-                'timemodified' => $now,
+                'timemodified' => $timemodified,
             ]);
         }
     }
@@ -1931,7 +1995,7 @@ class matrix_data {
                 'studentid', 'topicid', 'courseid',
                 'assessorcomment', 'assessorcommentby', 'assessorcommenttime',
                 'iqacomment', 'iqacommentby', 'iqacommenttime',
-            ]);
+            ], self::resolve_archivedtime($courseid, $commentdate));
             foreach ($fields as $field => $value) {
                 $existing->$field = $value;
             }
@@ -2049,7 +2113,7 @@ class matrix_data {
             self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
                 'studentid', 'topicid', 'courseid', 'value', 'comment',
                 'gradedby', 'timemodified', 'commentedby', 'commenttime',
-            ]);
+            ], time());
             $DB->delete_records('block_nvq_matrix_grades', ['id' => $existing->id]);
             return;
         }
@@ -2057,7 +2121,7 @@ class matrix_data {
         self::snapshot_history('block_nvq_matrix_grades_history', $existing, [
             'studentid', 'topicid', 'courseid', 'value', 'comment',
             'gradedby', 'timemodified', 'commentedby', 'commenttime',
-        ]);
+        ], time());
         $existing->value        = null;
         $existing->gradedby     = null;
         $existing->timemodified = null;
@@ -2130,6 +2194,7 @@ class matrix_data {
         $grade = [];
         foreach ($graderows as $r) {
             $grade[] = (object) [
+                'id'           => (int) $r->id,
                 'valuetext'    => self::format_grade_value_text($r->value),
                 'comment'      => (string) $r->comment,
                 'setby'        => $usernames[(int) $r->gradedby] ?? '',
@@ -2151,6 +2216,7 @@ class matrix_data {
                 continue;
             }
             $unitcomment[] = (object) [
+                'id'           => (int) $r->id,
                 'comment'      => (string) $r->iqacomment,
                 'setby'        => $usernames[(int) $r->iqacommentby] ?? '',
                 'settime'      => $r->iqacommenttime ? userdate($r->iqacommenttime, '%d/%m/%Y') : '',
@@ -2188,6 +2254,7 @@ class matrix_data {
         $sampling = [];
         foreach ($rows as $r) {
             $sampling[] = (object) [
+                'id'           => (int) $r->id,
                 'statustext'   => self::format_sampling_status_text($r->status),
                 'setby'        => $usernames[(int) $r->sampledby] ?? '',
                 'settime'      => $r->timemodified ? userdate($r->timemodified, '%d/%m/%Y') : '',
@@ -2224,6 +2291,7 @@ class matrix_data {
         $status = [];
         foreach ($rows as $r) {
             $status[] = (object) [
+                'id'           => (int) $r->id,
                 'statustext'   => self::format_final_status_text($r->status),
                 'setby'        => $usernames[(int) $r->setby] ?? '',
                 'settime'      => $r->timemodified ? userdate($r->timemodified, '%d/%m/%Y') : '',
@@ -2238,6 +2306,51 @@ class matrix_data {
         }
 
         return $status;
+    }
+
+    /**
+     * Permanently deletes ONE specific history row. Called only from
+     * history.php's action=delete, which itself requires genuine site
+     * admin status (is_siteadmin()) - not :viewall, not manager, not
+     * any plugin capability - client decision (2026-09-08): editing the
+     * audit trail itself is sensitive enough that even a Manager
+     * shouldn't be able to do it, only a true site admin. This method
+     * itself re-verifies the row genuinely belongs to the claimed
+     * student+course before deleting anything, matching this plugin's
+     * established "never trust a client-supplied id without
+     * re-checking server-side" rule (see delete_archived.php's own
+     * docblock for the precedent).
+     *
+     * $type is a short internal label, not a raw table name - never
+     * pass user input directly as a table name.
+     *
+     * @param string $type 'grade' | 'sampling' | 'unitcomment' | 'status'
+     * @param int $historyid The specific history row's own id.
+     * @param int $studentid
+     * @param int $courseid
+     * @return bool True if a row was genuinely found and deleted.
+     */
+    public static function delete_history_entry(string $type, int $historyid, int $studentid, int $courseid): bool {
+        global $DB;
+
+        $tables = [
+            'grade'       => 'block_nvq_matrix_grades_history',
+            'sampling'    => 'block_nvq_matrix_sampling_history',
+            'unitcomment' => 'block_nvq_matrix_unit_comments_history',
+            'status'      => 'block_nvq_matrix_status_history',
+        ];
+
+        if (!isset($tables[$type])) {
+            return false;
+        }
+
+        $conditions = ['id' => $historyid, 'studentid' => $studentid, 'courseid' => $courseid];
+        if (!$DB->record_exists($tables[$type], $conditions)) {
+            return false;
+        }
+
+        $DB->delete_records($tables[$type], $conditions);
+        return true;
     }
 
     /**
