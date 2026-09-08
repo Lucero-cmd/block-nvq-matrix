@@ -17,6 +17,37 @@
 /**
  * Version metadata for the block_nvq_matrix plugin.
  *
+ * v26.6.25 (1.20.25) — Client decision (2026-09-08): properly separates
+ *   Assessor and IQA/EQA duties on this site's own custom roles
+ *   (assessor/iqa/eqa - created independently of this plugin, all
+ *   verified live via CLI: assessor=editingteacher archetype,
+ *   iqa/eqa=teacher archetype), which had never actually been enforced
+ *   before now - every role was simply inheriting whatever
+ *   db/access.php's archetype-level defaults happened to grant:
+ *
+ *   - Assessor loses :iqacomment and :sample - an assessor recording
+ *     their own IQA sampling/comment defeats the entire point of
+ *     independent quality assurance; both were only ever granted as a
+ *     side effect of the editingteacher archetype's default here, not
+ *     a deliberate design choice.
+ *   - IQA gains :sample (not part of the teacher archetype's default
+ *     at all - had to be added, not just un-prevented) and loses
+ *     :exportportfolio - IQA samples and comments, nothing else.
+ *   - EQA loses :iqacomment and :exportportfolio, leaving only
+ *     :viewall - genuinely view-only. Export deliberately excluded
+ *     (client decision: "keep that internal for now").
+ *
+ *   Applied via new role_capabilities overrides in db/upgrade.php
+ *   (assign_capability() calls, identical in effect to editing each
+ *   role through Define Roles and saving) - deliberately scoped to
+ *   these three specific roles by shortname, NOT to the editingteacher/
+ *   teacher archetypes generally, since changing archetype-level
+ *   defaults in access.php would also silently affect the standard
+ *   Moodle editingteacher/teacher roles and any other role built on
+ *   them for an unrelated purpose. Verified correct against all 8
+ *   nvq_matrix capabilities across all 4 roles on staging before being
+ *   written into this upgrade step. No schema change.
+ *
  * v26.6.24 (1.20.24) — REAL BUG: a single logical edit in this UI
  *   frequently decomposes into more than one independent AJAX call -
  *   e.g. "set a new grade and date" fires a separate save when the
@@ -2751,7 +2782,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026091600;
+$plugin->version   = 2026091700;
 $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is version-pinned above that.
 // $plugin->supported deliberately omitted. Setting an upper branch number here
 // (e.g. [405, 501]) only controls a cosmetic "not officially supported"
@@ -2766,4 +2797,4 @@ $plugin->requires  = 2024100700; // Moodle 4.5 — floor only, nothing here is v
 // clear error on upgrade — re-test at that point rather than pre-emptively.
 $plugin->component = 'block_nvq_matrix';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.20.24';
+$plugin->release   = '1.20.25';

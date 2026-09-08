@@ -1055,5 +1055,70 @@ function xmldb_block_nvq_matrix_upgrade(int $oldversion): bool {
         // Nvq_matrix savepoint reached.
         upgrade_block_savepoint(true, 2026091600, 'nvq_matrix');
     }
+
+    if ($oldversion < 2026091700) {
+        // No schema change - applies role_capabilities overrides only,
+        // via assign_capability(), exactly matching what Site
+        // administration > Define roles would do if saved through the
+        // UI. Client decision (2026-09-08): separates Assessor and IQA
+        // duties properly, which this site's own custom roles
+        // (assessor/iqa/eqa, all created independently of this plugin -
+        // see db/access.php's own archetype-based defaults, which this
+        // step deliberately does NOT touch) had never actually enforced
+        // before now:
+        //
+        //   - Assessor (editingteacher archetype) loses :iqacomment and
+        //     :sample - both were only ever granted because they're
+        //     part of the editingteacher archetype's default for this
+        //     plugin, not because an Assessor recording their own IQA
+        //     sampling/comment was ever intended. Confirmed live on
+        //     staging: a single independent quality-assurance check is
+        //     meaningless if the same person who made the original
+        //     grading decision can also "sample" or "IQA comment" it.
+        //   - IQA (teacher archetype) gains :sample (not part of the
+        //     teacher archetype's default at all) and loses
+        //     :exportportfolio (was granted only because :exportportfolio
+        //     is part of the teacher archetype's default here too) - IQA
+        //     samples and comments, nothing else.
+        //   - EQA (teacher archetype) loses :iqacomment and
+        //     :exportportfolio, leaving only :viewall - genuinely
+        //     view-only, deliberately excluding export (client decision
+        //     2026-09-08: "keep that internal for now").
+        //
+        // Deliberately scoped to these three SPECIFIC roles by
+        // shortname, not to the editingteacher/teacher archetypes
+        // generally - changing the archetype-level defaults in
+        // db/access.php would also silently affect the STANDARD Moodle
+        // editingteacher/teacher roles (and any other role built on
+        // them for an unrelated purpose), which is not what this
+        // decision was about. Each role lookup is defensive (skipped
+        // entirely if that role doesn't exist) so this step is safe to
+        // run on a hypothetical future install that doesn't have these
+        // site-specific custom roles at all.
+        $syscontext = \context_system::instance();
+
+        $assessorrole = $DB->get_record('role', ['shortname' => 'assessor']);
+        if ($assessorrole) {
+            assign_capability('block/nvq_matrix:iqacomment', CAP_PREVENT, $assessorrole->id, $syscontext->id, true);
+            assign_capability('block/nvq_matrix:sample', CAP_PREVENT, $assessorrole->id, $syscontext->id, true);
+        }
+
+        $iqarole = $DB->get_record('role', ['shortname' => 'iqa']);
+        if ($iqarole) {
+            assign_capability('block/nvq_matrix:sample', CAP_ALLOW, $iqarole->id, $syscontext->id, true);
+            assign_capability('block/nvq_matrix:exportportfolio', CAP_PREVENT, $iqarole->id, $syscontext->id, true);
+        }
+
+        $eqarole = $DB->get_record('role', ['shortname' => 'eqa']);
+        if ($eqarole) {
+            assign_capability('block/nvq_matrix:iqacomment', CAP_PREVENT, $eqarole->id, $syscontext->id, true);
+            assign_capability('block/nvq_matrix:exportportfolio', CAP_PREVENT, $eqarole->id, $syscontext->id, true);
+        }
+
+        accesslib_clear_all_caches(false);
+
+        // Nvq_matrix savepoint reached.
+        upgrade_block_savepoint(true, 2026091700, 'nvq_matrix');
+    }
     return true;
 }
